@@ -62,7 +62,9 @@ fun GlimmerApp(viewModel: GlimmerViewModel) {
                 HomeScreen(
                     viewModel = viewModel,
                     onNavigateToDetail = { id -> navController.navigate(DetailRoute(id)) },
-                    onNavigateToAdd = { navController.navigate(AddRoute) }
+                    onNavigateToAdd = { navController.navigate(AddRoute) },
+                    onNavigateToNotifications = { navController.navigate(NotificationsRoute) },
+                    onNavigateToProfile = { navController.navigate(ProfileRoute) }
                 )
             }
             composable<AddRoute> {

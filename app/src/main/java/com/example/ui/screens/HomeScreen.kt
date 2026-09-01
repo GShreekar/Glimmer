@@ -10,12 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +35,9 @@ import com.example.viewmodel.daysUntilBirthday
 fun HomeScreen(
     viewModel: GlimmerViewModel,
     onNavigateToDetail: (Int) -> Unit,
-    onNavigateToAdd: () -> Unit
+    onNavigateToAdd: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
+    onNavigateToProfile: () -> Unit
 ) {
     val filteredBirthdays by viewModel.filteredBirthdays.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -56,7 +58,7 @@ fun HomeScreen(
                 },
                 actions = {
                     NeumorphicIconButton(
-                        onClick = { },
+                        onClick = onNavigateToNotifications,
                         modifier = Modifier
                             .padding(end = 8.dp)
                             .size(36.dp),
@@ -70,7 +72,7 @@ fun HomeScreen(
                         )
                     }
                     NeumorphicIconButton(
-                        onClick = { },
+                        onClick = onNavigateToProfile,
                         modifier = Modifier
                             .padding(end = 16.dp)
                             .size(36.dp),
@@ -235,7 +237,7 @@ private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
                 cornerRadius = 12.dp
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("View & Send a Wish", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }

@@ -2,11 +2,9 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,9 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.ui.components.NeumorphicButton
 import com.example.ui.components.NeumorphicIconButton
-import com.example.ui.components.NeumorphicSwitch
 import com.example.ui.components.neumorphic
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,21 +20,29 @@ import com.example.ui.components.neumorphic
 fun SyncBackupScreen(
     onNavigateBack: () -> Unit
 ) {
-    var autoSyncEnabled by remember { mutableStateOf(true) }
-    var lastSynced by remember { mutableStateOf("Today, 10:42 AM") }
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sync & Backup") },
+                title = {
+                    Text(
+                        "Sync & Backup",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
                 navigationIcon = {
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier
-                            .padding(start = 16.dp)
-                            .size(40.dp)
+                            .padding(start = 12.dp)
+                            .size(40.dp),
+                        cornerRadius = 20.dp
                     ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -50,99 +54,92 @@ fun SyncBackupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            
+            // Neumorphic cloud icon
             Box(
                 modifier = Modifier
                     .size(120.dp)
                     .neumorphic(cornerRadius = 60.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(60.dp))
+                Icon(
+                    Icons.Default.CloudSync,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(56.dp)
+                )
             }
+
+            Spacer(modifier = Modifier.height(36.dp))
+
+            // "Coming Soon" badge
+            Box(
+                modifier = Modifier
+                    .neumorphic(
+                        cornerRadius = 20.dp,
+                        shapeBackgroundColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "✨  Feature Coming Soon",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
+
             Text(
-                text = "Cloud Sync & Backup",
+                "Cloud Sync & Backup",
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Text(
-                text = "Last synced: $lastSynced",
+                "We're working on secure cloud backup so your memories are always safe.\n\nThis feature will let you sync across devices and restore your birthday data anytime.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Column(
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // Decorative progress dots
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .neumorphic(cornerRadius = 16.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                    .neumorphic(isSunken = true, cornerRadius = 16.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface)
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Auto Sync Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .neumorphic(cornerRadius = 20.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text("Auto-Sync", style = MaterialTheme.typography.bodyLarge)
-                            Text("Sync daily over Wi-Fi", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    NeumorphicSwitch(
-                        checked = autoSyncEnabled,
-                        onCheckedChange = { autoSyncEnabled = it }
+                    Icon(
+                        Icons.Default.Build,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(28.dp)
                     )
-                }
-                
-                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-
-                // Sync Now Button
-                NeumorphicButton(
-                    onClick = { lastSynced = "Just now" },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    cornerRadius = 16.dp
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Sync Now", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-
-                // Restore Backup Button
-                NeumorphicButton(
-                    onClick = { },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    cornerRadius = 16.dp
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Restore from Backup", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelLarge)
-                    }
+                    Text(
+                        "Under Development",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Text(
+                        "Stay tuned for the next release of Glimmer!",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }

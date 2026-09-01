@@ -127,6 +127,13 @@ fun NeumorphicSwitch(
     }
 }
 
+/**
+ * A neumorphic text field.
+ *
+ * When [onClick] is provided, the field acts as a tap target (e.g. date picker or dropdown).
+ * In that case, the BasicTextField is disabled so touches propagate to the outer Box clickable,
+ * and a neumorphic press animation plays when the user taps.
+ */
 @Composable
 fun NeumorphicTextField(
     value: String,
@@ -135,29 +142,31 @@ fun NeumorphicTextField(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     trailingIcon: ImageVector? = null,
-    // When readOnly + onClick is provided, the field acts as a tap target (e.g. date picker)
     readOnly: Boolean = false,
     onClick: (() -> Unit)? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
+    val isTapTarget = onClick != null
     val interactionSource = remember { MutableInteractionSource() }
+    // Press animation only applies when this field acts as a button (tap target)
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .neumorphic(
-                isSunken = true,
+                isSunken = if (isTapTarget) isPressed else true,
                 cornerRadius = 12.dp,
                 shapeBackgroundColor = MaterialTheme.colorScheme.surface
             )
             .then(
-                if (onClick != null) {
+                if (isTapTarget) {
                     Modifier.clickable(
                         interactionSource = interactionSource,
                         indication = null,
-                        onClick = onClick
+                        onClick = onClick!!
                     )
                 } else Modifier
             ),
@@ -166,14 +175,14 @@ fun NeumorphicTextField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            // FIXED: readOnly but always visually enabled — no greying out
-            readOnly = readOnly || onClick != null,
-            enabled = true,
+            // When acting as a tap target, disable the text field so touches go to the outer Box
+            readOnly = readOnly || isTapTarget,
+            enabled = !isTapTarget,
             textStyle = MaterialTheme.typography.bodyLarge.copy(
                 color = MaterialTheme.colorScheme.onSurface
             ),
             singleLine = true,
-            interactionSource = interactionSource,
+            interactionSource = if (!isTapTarget) interactionSource else remember { MutableInteractionSource() },
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
             modifier = Modifier
