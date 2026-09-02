@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <!--
+      windowBackground is set explicitly here as a fallback for any launch path that doesn't go
+      through Theme.Glimmer.Starting below (e.g. a config change during launch) — without it, a
+      dark, neumorphic app opens with the device's default (usually white) window background for
+      one frame on cold start, which is a jarring first impression for a "premium dark" app.
+    -->
+    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/glimmer_surface</item>
+    </style>
+
+    <!--
+      The actual fix: a proper Android 12+ SplashScreen (compat-backed to minSdk 24 by
+      androidx.core:core-splashscreen) shown while MainActivity is still constructing, instead of
+      an unthemed system window. installSplashScreen() in MainActivity.onCreate switches back to
+      Theme.MyApplication once the first frame is ready.
+    -->
+    <style name="Theme.Glimmer.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/glimmer_surface</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.MyApplication</item>
+    </style>
 </resources>

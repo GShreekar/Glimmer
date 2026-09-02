@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -31,6 +33,7 @@ import com.example.ui.components.neumorphic
 import com.example.viewmodel.GlimmerViewModel
 import com.example.viewmodel.ageOnNextBirthday
 import com.example.viewmodel.daysUntilBirthday
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -47,6 +50,8 @@ fun BirthdayDetailScreen(
     val birthday = birthdayState
     var showDeleteDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     // Delete confirmation dialog
     if (showDeleteDialog) {
@@ -147,6 +152,7 @@ fun BirthdayDetailScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Column(
@@ -216,11 +222,20 @@ fun BirthdayDetailScreen(
                     color = MaterialTheme.colorScheme.primary,
                     bgColor = MaterialTheme.colorScheme.surface,
                     onClick = {
-                        val smsIntent = Intent(Intent.ACTION_VIEW).apply {
-                            data = Uri.parse("sms:")
+                        // ACTION_SENDTO with a smsto: URI prefills the recipient; a bare "sms:"
+                        // URI (the old fallback) opens an empty composer the user has to address
+                        // by hand, which defeats the point of a "one tap" quick action.
+                        val phone = birthday.phoneNumber
+                        val smsIntent = if (!phone.isNullOrBlank()) {
+                            Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone"))
+                        } else {
+                            Intent(Intent.ACTION_VIEW, Uri.parse("sms:"))
+                        }.apply {
                             putExtra("sms_body", "Happy Birthday ${birthday.name}! 🎂🎉")
                         }
-                        context.startActivity(smsIntent)
+                        context.safeStartActivity(smsIntent) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("No messaging app found") }
+                        }
                     }
                 )
                 ActionButton(
@@ -230,8 +245,15 @@ fun BirthdayDetailScreen(
                     color = MaterialTheme.colorScheme.tertiary,
                     bgColor = MaterialTheme.colorScheme.surface,
                     onClick = {
-                        val dialIntent = Intent(Intent.ACTION_DIAL)
-                        context.startActivity(dialIntent)
+                        val phone = birthday.phoneNumber
+                        val dialIntent = if (!phone.isNullOrBlank()) {
+                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                        } else {
+                            Intent(Intent.ACTION_DIAL)
+                        }
+                        context.safeStartActivity(dialIntent) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("No dialer app found") }
+                        }
                     }
                 )
                 ActionButton(
@@ -243,7 +265,9 @@ fun BirthdayDetailScreen(
                     onClick = {
                         val searchIntent = Intent(Intent.ACTION_VIEW,
                             Uri.parse("https://www.google.com/search?q=birthday+gift+ideas+for+${Uri.encode(birthday.relationship.lowercase())}"))
-                        context.startActivity(searchIntent)
+                        context.safeStartActivity(searchIntent) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("No browser found") }
+                        }
                     }
                 )
             }
@@ -264,6 +288,9 @@ fun BirthdayDetailScreen(
                 DetailRow(label = "Full Name", value = birthday.name)
                 DetailRow(label = "Date of Birth", value = fullDateFormat.format(birthday.birthLocalDate()))
                 DetailRow(label = "Relationship", value = birthday.relationship)
+                if (!birthday.phoneNumber.isNullOrBlank()) {
+                    DetailRow(label = "Phone", value = birthday.phoneNumber)
+                }
                 DetailRow(label = "Reminder", value = if (birthday.reminderEnabled) birthday.reminderTime else "Off")
                 if (!birthday.notes.isNullOrBlank()) {
                     DetailRow(label = "Notes", value = birthday.notes)
@@ -272,6 +299,19 @@ fun BirthdayDetailScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
         }
+    }
+}
+
+/**
+ * Launches [intent], calling [onMissing] instead of crashing when no app can handle it — a
+ * device with no SMS app, no dialer, or no browser (some tablets, Android Go, enterprise builds)
+ * would otherwise throw ActivityNotFoundException straight out of these quick actions.
+ */
+private fun Context.safeStartActivity(intent: Intent, onMissing: () -> Unit) {
+    try {
+        startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        onMissing()
     }
 }
 

@@ -3,10 +3,12 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
@@ -19,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.Birthday
 import com.example.ui.components.NeumorphicButton
@@ -52,6 +55,7 @@ fun EditBirthdayScreen(
     var name by remember(birthday) { mutableStateOf(birthday.name) }
     var notificationsEnabled by remember(birthday) { mutableStateOf(birthday.reminderEnabled) }
     var notes by remember(birthday) { mutableStateOf(birthday.notes ?: "") }
+    var phoneNumber by remember(birthday) { mutableStateOf(birthday.phoneNumber ?: "") }
 
     var dateOfBirth by remember(birthday) { mutableStateOf<Long?>(birthday.dateOfBirth) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -184,6 +188,16 @@ fun EditBirthdayScreen(
                     }
                 }
 
+                FormEntry(label = "Phone Number (optional)") {
+                    NeumorphicTextField(
+                        value = phoneNumber,
+                        onValueChange = { phoneNumber = it },
+                        placeholder = "e.g., (555) 123-4567",
+                        icon = Icons.Default.Call,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                    )
+                }
+
                 FormEntry(label = "Notes (optional)") {
                     NeumorphicTextField(
                         value = notes,
@@ -275,7 +289,8 @@ fun EditBirthdayScreen(
                                 relationship = relationship,
                                 reminderEnabled = notificationsEnabled,
                                 reminderTime = if (notificationsEnabled) reminderType else "",
-                                notes = notes.trim().ifBlank { null }
+                                notes = notes.trim().ifBlank { null },
+                                phoneNumber = phoneNumber.trim().ifBlank { null }
                             )
                         )
                         onNavigateBack()

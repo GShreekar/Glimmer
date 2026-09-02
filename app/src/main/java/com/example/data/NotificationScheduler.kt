@@ -12,7 +12,9 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.MainActivity
+import com.example.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -30,6 +32,7 @@ object NotificationScheduler {
     const val CHANNEL_ID_SILENT = "glimmer_birthday_channel_silent"
     const val EXTRA_BIRTHDAY_NAME = "birthday_name"
     const val EXTRA_BIRTHDAY_ID = "birthday_id"
+    const val EXTRA_DAYS_BEFORE = "days_before"
     private const val REMINDER_HOUR_OF_DAY = 9
 
     fun createNotificationChannel(context: Context) {
@@ -98,6 +101,9 @@ object NotificationScheduler {
         val intent = Intent(context, BirthdayAlarmReceiver::class.java).apply {
             putExtra(EXTRA_BIRTHDAY_NAME, birthday.name)
             putExtra(EXTRA_BIRTHDAY_ID, birthday.id)
+            // So the notification's copy can say "today" / "tomorrow" / "in N days" correctly —
+            // without this the receiver has no way to know which offset actually fired.
+            putExtra(EXTRA_DAYS_BEFORE, daysBeforeOffset)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -183,6 +189,7 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val name = intent.getStringExtra(NotificationScheduler.EXTRA_BIRTHDAY_NAME) ?: "Someone"
         val birthdayId = intent.getIntExtra(NotificationScheduler.EXTRA_BIRTHDAY_ID, 0)
+        val daysBefore = intent.getIntExtra(NotificationScheduler.EXTRA_DAYS_BEFORE, 0)
 
         // setExactAndAllowWhileIdle is one-shot: without re-arming here, this person's reminder
         // would never fire again. goAsync() keeps the process alive long enough for the settings
@@ -193,7 +200,7 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             try {
                 val settings = SettingsRepository.getInstance(context)
                 val soundEnabled = settings.soundEnabled.first()
-                postNotification(context, birthdayId, name, soundEnabled)
+                postNotification(context, birthdayId, name, daysBefore, soundEnabled)
 
                 // Only re-arm if the global toggle is still on — otherwise this birthday's alarm
                 // stays cancelled, matching whatever the user set in Notifications settings.
@@ -211,7 +218,13 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun postNotification(context: Context, birthdayId: Int, name: String, soundEnabled: Boolean) {
+    private fun postNotification(
+        context: Context,
+        birthdayId: Int,
+        name: String,
+        daysBefore: Int,
+        soundEnabled: Boolean
+    ) {
         NotificationScheduler.createNotificationChannel(context)
         val channelId = if (soundEnabled) {
             NotificationScheduler.CHANNEL_ID_SOUND
@@ -227,10 +240,19 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Previously every reminder said "is coming up!" regardless of which offset fired it —
+        // including the "on the day" one, which should say the birthday IS today.
+        val body = when (daysBefore) {
+            0 -> "$name's birthday is today! 🎉"
+            1 -> "$name's birthday is tomorrow."
+            else -> "$name's birthday is in $daysBefore days."
+        }
+
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(context, R.color.glimmer_accent))
             .setContentTitle("🎂 Birthday Reminder")
-            .setContentText("$name's birthday is coming up!")
+            .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tapPendingIntent)
             .setAutoCancel(true)

@@ -14,5 +14,6 @@ data class Birthday(
     val reminderEnabled: Boolean = true,
     val reminderTime: String = "1 day before",
     val photoUri: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val phoneNumber: String? = null
 )

@@ -3,11 +3,13 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
@@ -20,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.Birthday
 import com.example.ui.components.NeumorphicButton
@@ -41,6 +44,7 @@ fun AddBirthdayScreen(
     var name by remember { mutableStateOf("") }
     var notificationsEnabled by remember { mutableStateOf(true) }
     var notes by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
 
     var dateOfBirth by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -200,6 +204,18 @@ fun AddBirthdayScreen(
                     }
                 }
 
+                // Phone number — powers the Message/Call quick actions on the Detail screen;
+                // without it those buttons can only open an empty composer/dialer.
+                FormEntry(label = "Phone Number (optional)") {
+                    NeumorphicTextField(
+                        value = phoneNumber,
+                        onValueChange = { phoneNumber = it },
+                        placeholder = "e.g., (555) 123-4567",
+                        icon = Icons.Default.Call,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                    )
+                }
+
                 // Notes field
                 FormEntry(label = "Notes (optional)") {
                     NeumorphicTextField(
@@ -310,7 +326,8 @@ fun AddBirthdayScreen(
                                 relationship = relationship,
                                 reminderEnabled = notificationsEnabled,
                                 reminderTime = if (notificationsEnabled) reminderType else "",
-                                notes = notes.trim().ifBlank { null }
+                                notes = notes.trim().ifBlank { null },
+                                phoneNumber = phoneNumber.trim().ifBlank { null }
                             )
                         )
                         onNavigateBack()

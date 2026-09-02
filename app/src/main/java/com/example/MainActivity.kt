@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import com.example.data.AppDatabase
 import com.example.data.BirthdayRepository
@@ -31,6 +32,10 @@ class MainActivity : ComponentActivity() {
     ) { /* Either way, the Home screen's banner reflects the real, current permission state. */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Must be called before super.onCreate() — it reads the activity's theme
+        // (Theme.Glimmer.Starting) to know how to draw the splash window, then switches to
+        // postSplashScreenTheme (Theme.MyApplication) once the first frame is ready.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 

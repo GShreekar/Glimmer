@@ -30,7 +30,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.MyApplication">
+            android:theme="@style/Theme.Glimmer.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -42,12 +42,19 @@
             android:name="com.example.data.BirthdayAlarmReceiver"
             android:exported="false" />
 
-        <!-- Receiver to reschedule alarms after device reboot -->
+        <!--
+          Reschedules alarms after events that clear or invalidate them: reboot (AlarmManager
+          alarms don't survive it), an app update (MY_PACKAGE_REPLACED — some OEMs/versions clear
+          exact alarms across updates), and a timezone change (every alarm's trigger time is
+          computed in the device's local zone; see NotificationScheduler.scheduleReminder).
+        -->
         <receiver
             android:name="com.example.data.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
     </application>
