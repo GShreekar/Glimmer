@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 class BirthdayRepository(private val birthdayDao: BirthdayDao) {
     val allBirthdays: Flow<List<Birthday>> = birthdayDao.getAllBirthdays()
 
-    suspend fun insert(birthday: Birthday) = birthdayDao.insertBirthday(birthday)
+    suspend fun insert(birthday: Birthday): Long = birthdayDao.insertBirthday(birthday)
 
     suspend fun update(birthday: Birthday) = birthdayDao.updateBirthday(birthday)
 

@@ -10,13 +10,20 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
-import java.util.Calendar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 object NotificationScheduler {
 
     const val CHANNEL_ID = "glimmer_birthday_channel"
     const val EXTRA_BIRTHDAY_NAME = "birthday_name"
     const val EXTRA_BIRTHDAY_ID = "birthday_id"
+    private const val REMINDER_HOUR_OF_DAY = 9
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -44,25 +51,29 @@ object NotificationScheduler {
         }
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        // Build the next occurrence of the birthday
-        val now = Calendar.getInstance()
-        val bCal = Calendar.getInstance().apply {
-            timeInMillis = birthday.dateOfBirth
-        }
+        // birthMonthDay() reads Birthday.dateOfBirth as UTC — the convention it's stored in —
+        // then the reminder fires at REMINDER_HOUR_OF_DAY in the device's own local time. Mixing
+        // a UTC-interpreted date with a default-timezone "now" (as a raw Calendar would) shifts
+        // the alarm by a day for anyone west of UTC.
+        val monthDay = birthday.birthMonthDay()
+        val zone = ZoneId.systemDefault()
 
-        val target = Calendar.getInstance().apply {
-            set(Calendar.MONTH, bCal.get(Calendar.MONTH))
-            set(Calendar.DAY_OF_MONTH, bCal.get(Calendar.DAY_OF_MONTH))
-            set(Calendar.HOUR_OF_DAY, 9)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            add(Calendar.DAY_OF_MONTH, -daysBeforeOffset)
-        }
+        // targetFor(year) is keyed by the BIRTHDAY's occurrence year, not the offset target's own
+        // year — those differ whenever the offset crosses a year boundary (e.g. a Jan 5 birthday
+        // with a 1-week-before reminder targets Dec 29 of the *previous* year).
+        fun targetFor(occurrenceYear: Int): ZonedDateTime =
+            monthDay.atYear(occurrenceYear)
+                .minusDays(daysBeforeOffset.toLong())
+                .atTime(REMINDER_HOUR_OF_DAY, 0)
+                .atZone(zone)
 
-        // If the target time has already passed this year, schedule for next year
-        if (target.before(now)) {
-            target.add(Calendar.YEAR, 1)
+        val nowZoned = ZonedDateTime.now(zone)
+        var occurrenceYear = LocalDate.now(zone).year
+        var target = targetFor(occurrenceYear)
+        // If this year's occurrence has already passed, schedule next year's instead.
+        if (target.isBefore(nowZoned)) {
+            occurrenceYear += 1
+            target = targetFor(occurrenceYear)
         }
 
         val intent = Intent(context, BirthdayAlarmReceiver::class.java).apply {
@@ -77,27 +88,29 @@ object NotificationScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val triggerAtMillis = target.toInstant().toEpochMilli()
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
-                        target.timeInMillis,
+                        triggerAtMillis,
                         pendingIntent
                     )
                 } else {
-                    alarmManager.set(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 }
             } else {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
-                    target.timeInMillis,
+                    triggerAtMillis,
                     pendingIntent
                 )
             }
         } catch (e: SecurityException) {
             // Fall back to inexact alarm
-            alarmManager.set(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         }
     }
 
@@ -127,6 +140,27 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         val name = intent.getStringExtra(NotificationScheduler.EXTRA_BIRTHDAY_NAME) ?: "Someone"
         val birthdayId = intent.getIntExtra(NotificationScheduler.EXTRA_BIRTHDAY_ID, 0)
 
+        postNotification(context, birthdayId, name)
+
+        // setExactAndAllowWhileIdle is one-shot: without re-arming here, this person's reminder
+        // would never fire again. goAsync() keeps the process alive long enough for the DB read —
+        // onReceive would otherwise return (and the receiver could be killed) before it completes.
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val birthday = AppDatabase.getDatabase(context).birthdayDao()
+                    .getBirthdayById(birthdayId).first()
+                if (birthday != null && birthday.reminderEnabled) {
+                    val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
+                    NotificationScheduler.scheduleReminder(context, birthday, offset)
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun postNotification(context: Context, birthdayId: Int, name: String) {
         NotificationScheduler.createNotificationChannel(context)
 
         val tapIntent = Intent(context, MainActivity::class.java).apply {

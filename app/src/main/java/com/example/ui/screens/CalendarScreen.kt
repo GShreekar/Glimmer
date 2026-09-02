@@ -27,10 +27,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.Birthday
+import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.neumorphic
 import com.example.viewmodel.GlimmerViewModel
 import java.text.SimpleDateFormat
+import java.time.Month
+import java.time.format.TextStyle
 import java.util.Calendar
 import java.util.Locale
 
@@ -62,17 +65,16 @@ fun CalendarScreen(
         list
     }
 
-    // Map day-of-month -> list of birthdays (matches by MONTH and DAY, ignoring year)
+    // Map day-of-month -> list of birthdays (matches by MONTH and DAY, ignoring year).
+    // birthMonthDay() reads Birthday.dateOfBirth as UTC — the convention it's stored in — so this
+    // can't drift out of sync with the countdown, the alarm scheduler, or any other date display.
     val birthdaysByDay = remember(allBirthdays, currentCalendar) {
         val map = mutableMapOf<Int, MutableList<Birthday>>()
+        val currentMonth = Month.of(currentCalendar.get(Calendar.MONTH) + 1)
         allBirthdays.forEach { birthday ->
-            val bCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
-                timeInMillis = birthday.dateOfBirth
-            }
-            // Compare month only (not year)
-            if (bCal.get(Calendar.MONTH) == currentCalendar.get(Calendar.MONTH)) {
-                val day = bCal.get(Calendar.DAY_OF_MONTH)
-                map.getOrPut(day) { mutableListOf() }.add(birthday)
+            val monthDay = birthday.birthMonthDay()
+            if (monthDay.month == currentMonth) {
+                map.getOrPut(monthDay.dayOfMonth) { mutableListOf() }.add(birthday)
             }
         }
         map
@@ -303,9 +305,9 @@ fun CalendarScreen(
 
 @Composable
 private fun CalendarBirthdayItem(birthday: Birthday, onClick: () -> Unit) {
-    val bCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = birthday.dateOfBirth }
-    val dayOfMonth = bCal.get(Calendar.DAY_OF_MONTH)
-    val monthAbbr = SimpleDateFormat("MMM", Locale.getDefault()).format(bCal.time)
+    val monthDay = birthday.birthMonthDay()
+    val dayOfMonth = monthDay.dayOfMonth
+    val monthAbbr = monthDay.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
 
     Row(
         modifier = Modifier

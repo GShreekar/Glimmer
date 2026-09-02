@@ -1,8 +1,7 @@
 package com.example.ui.screens
 
-import java.util.Calendar
+import java.time.format.TextStyle
 import java.util.Locale
-import java.text.SimpleDateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,11 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.example.data.Birthday
+import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicButton
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.neumorphic
 import com.example.viewmodel.GlimmerViewModel
-import com.example.viewmodel.calculateAge
+import com.example.viewmodel.ageOnNextBirthday
 import com.example.viewmodel.daysUntilBirthday
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,8 +43,8 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
 
     // Split into today's birthdays and upcoming
-    val todayBirthdays = filteredBirthdays.filter { daysUntilBirthday(it.dateOfBirth) == 0 }
-    val upcomingBirthdays = filteredBirthdays.filter { daysUntilBirthday(it.dateOfBirth) > 0 }
+    val todayBirthdays = filteredBirthdays.filter { daysUntilBirthday(it) == 0 }
+    val upcomingBirthdays = filteredBirthdays.filter { daysUntilBirthday(it) > 0 }
 
     Scaffold(
         topBar = {
@@ -205,7 +205,7 @@ fun HomeScreen(
 
 @Composable
 private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
-    val age = calculateAge(birthday.dateOfBirth)
+    val age = ageOnNextBirthday(birthday)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -248,10 +248,9 @@ private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
 
 @Composable
 private fun UpcomingBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
-    val monthFormat = remember { SimpleDateFormat("MMM", Locale.getDefault()) }
-    val bCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = birthday.dateOfBirth }
-    val dayStr = "${monthFormat.format(bCal.time)} ${bCal.get(Calendar.DAY_OF_MONTH)}"
-    val daysLeft = daysUntilBirthday(birthday.dateOfBirth)
+    val monthDay = birthday.birthMonthDay()
+    val dayStr = "${monthDay.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${monthDay.dayOfMonth}"
+    val daysLeft = daysUntilBirthday(birthday)
     val daysLabel = when (daysLeft) {
         0 -> "Today!"
         1 -> "Tomorrow"

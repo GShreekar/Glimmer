@@ -7,18 +7,17 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.Birthday
 import com.example.data.BirthdayRepository
 import com.example.data.NotificationScheduler
+import com.example.data.birthLocalDate
+import com.example.data.birthMonthDay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
 import java.time.MonthDay
-import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
-import java.util.Calendar
 
 class GlimmerViewModel(
     application: Application,
@@ -41,7 +40,7 @@ class GlimmerViewModel(
             it.name.contains(query, ignoreCase = true) || it.relationship.contains(query, ignoreCase = true)
         }
         // Sort by next occurrence (days until next birthday, irrespective of birth year)
-        filtered.sortedBy { daysUntilBirthday(it.dateOfBirth) }
+        filtered.sortedBy { daysUntilBirthday(it) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -50,8 +49,11 @@ class GlimmerViewModel(
 
     fun insertBirthday(birthday: Birthday) {
         viewModelScope.launch {
-            repository.insert(birthday)
-            scheduleNotification(birthday)
+            // Room assigns the real primary key here; the incoming `birthday` still carries the
+            // default id = 0. Scheduling with that would collide with every other new birthday's
+            // alarm (they'd all share PendingIntent request code 0).
+            val newId = repository.insert(birthday).toInt()
+            scheduleNotification(birthday.copy(id = newId))
         }
     }
 
@@ -83,13 +85,15 @@ class GlimmerViewModel(
     }
 }
 
-/** Returns how many days until the next occurrence of this birthday (0 = today). */
-fun daysUntilBirthday(dateOfBirth: Long, today: LocalDate = LocalDate.now()): Int {
-    // dateOfBirth is stored as UTC midnight (see AddBirthdayScreen's DatePicker), so it must
-    // always be read back in UTC — reading it in the device's default zone would shift the
-    // calendar date by a day for anyone west of UTC.
-    val dob = Instant.ofEpochMilli(dateOfBirth).atZone(ZoneOffset.UTC).toLocalDate()
-    val monthDay = MonthDay.of(dob.month, dob.dayOfMonth)
+/**
+ * Returns how many days until the next occurrence of this birthday (0 = today).
+ *
+ * Reads [Birthday.dateOfBirth] exclusively through [birthMonthDay] — the one place that value is
+ * interpreted as a calendar date — rather than a local Calendar, so this can't drift out of sync
+ * with how the date was stored or how it's displayed elsewhere.
+ */
+fun daysUntilBirthday(birthday: Birthday, today: LocalDate = LocalDate.now()): Int {
+    val monthDay = birthday.birthMonthDay()
 
     // MonthDay.atYear resolves Feb 29 to Feb 28 in a non-leap year instead of rolling into March.
     var next = monthDay.atYear(today.year)
@@ -98,21 +102,17 @@ fun daysUntilBirthday(dateOfBirth: Long, today: LocalDate = LocalDate.now()): In
     return ChronoUnit.DAYS.between(today, next).toInt()
 }
 
-/** Calculates the age the person will turn on their next birthday. */
-fun calculateAge(dateOfBirth: Long): Int {
-    val now = Calendar.getInstance()
-    val bCal = Calendar.getInstance().apply { timeInMillis = dateOfBirth }
-    var age = now.get(Calendar.YEAR) - bCal.get(Calendar.YEAR)
-    if (now.get(Calendar.MONTH) < bCal.get(Calendar.MONTH) ||
-        (now.get(Calendar.MONTH) == bCal.get(Calendar.MONTH) &&
-                now.get(Calendar.DAY_OF_MONTH) < bCal.get(Calendar.DAY_OF_MONTH))
-    ) {
-        // Birthday hasn't happened yet this year, so they haven't turned that age
-    } else {
-        // Birthday already passed or is today, next birthday they turn age+1
-        age += 1
-    }
-    return age
+/**
+ * The age the person turns on their next birthday — or turns today, if today is the day.
+ *
+ * `today` counts as "already happened", not "about to happen": someone born in 2000 turns 26,
+ * not 27, on their birthday itself.
+ */
+fun ageOnNextBirthday(birthday: Birthday, today: LocalDate = LocalDate.now()): Int {
+    val birth = birthday.birthLocalDate()
+    val thisYear = MonthDay.from(birth).atYear(today.year)
+    val nextOccurrenceYear = if (thisYear.isBefore(today)) today.year + 1 else today.year
+    return nextOccurrenceYear - birth.year
 }
 
 class GlimmerViewModelFactory(

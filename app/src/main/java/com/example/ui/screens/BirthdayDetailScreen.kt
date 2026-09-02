@@ -23,14 +23,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.data.birthLocalDate
+import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicButton
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.neumorphic
 import com.example.viewmodel.GlimmerViewModel
-import com.example.viewmodel.calculateAge
+import com.example.viewmodel.ageOnNextBirthday
 import com.example.viewmodel.daysUntilBirthday
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,20 +96,17 @@ fun BirthdayDetailScreen(
         return
     }
 
-    val bCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = birthday.dateOfBirth }
-    val monthFormat = SimpleDateFormat("MMMM", Locale.getDefault())
-    val fullDateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).apply {
-        timeZone = java.util.TimeZone.getTimeZone("UTC")
-    }
-    val daysLeft = daysUntilBirthday(birthday.dateOfBirth)
-    val age = calculateAge(birthday.dateOfBirth)
+    val monthDay = birthday.birthMonthDay()
+    val fullDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
+    val daysLeft = daysUntilBirthday(birthday)
+    val age = ageOnNextBirthday(birthday)
 
     val daysLabel = when (daysLeft) {
         0 -> "Today! 🎉"
         1 -> "Tomorrow"
         else -> "$daysLeft Days Away"
     }
-    val birthdateStr = "${monthFormat.format(bCal.time)} ${bCal.get(Calendar.DAY_OF_MONTH)}"
+    val birthdateStr = "${monthDay.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${monthDay.dayOfMonth}"
 
     Scaffold(
         topBar = {
@@ -263,7 +262,7 @@ fun BirthdayDetailScreen(
                 Text("Details", style = MaterialTheme.typography.headlineMedium)
 
                 DetailRow(label = "Full Name", value = birthday.name)
-                DetailRow(label = "Date of Birth", value = fullDateFormat.format(java.util.Date(birthday.dateOfBirth)))
+                DetailRow(label = "Date of Birth", value = fullDateFormat.format(birthday.birthLocalDate()))
                 DetailRow(label = "Relationship", value = birthday.relationship)
                 DetailRow(label = "Reminder", value = if (birthday.reminderEnabled) birthday.reminderTime else "Off")
                 if (!birthday.notes.isNullOrBlank()) {
