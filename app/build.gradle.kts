@@ -28,6 +28,8 @@ android {
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
+    // Required for java.time (LocalDate/MonthDay/etc.) on minSdk < 26.
+    isCoreLibraryDesugaringEnabled = true
   }
 
   buildFeatures {
@@ -61,4 +63,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
 
   "ksp"(libs.androidx.room.compiler)
+
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

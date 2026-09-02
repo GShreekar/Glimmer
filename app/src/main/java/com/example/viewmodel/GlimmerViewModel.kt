@@ -13,6 +13,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.MonthDay
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.Calendar
 
 class GlimmerViewModel(
@@ -79,25 +84,18 @@ class GlimmerViewModel(
 }
 
 /** Returns how many days until the next occurrence of this birthday (0 = today). */
-fun daysUntilBirthday(dateOfBirth: Long): Int {
-    val now = Calendar.getInstance()
-    val bCal = Calendar.getInstance().apply { timeInMillis = dateOfBirth }
+fun daysUntilBirthday(dateOfBirth: Long, today: LocalDate = LocalDate.now()): Int {
+    // dateOfBirth is stored as UTC midnight (see AddBirthdayScreen's DatePicker), so it must
+    // always be read back in UTC — reading it in the device's default zone would shift the
+    // calendar date by a day for anyone west of UTC.
+    val dob = Instant.ofEpochMilli(dateOfBirth).atZone(ZoneOffset.UTC).toLocalDate()
+    val monthDay = MonthDay.of(dob.month, dob.dayOfMonth)
 
-    val next = Calendar.getInstance().apply {
-        set(Calendar.MONTH, bCal.get(Calendar.MONTH))
-        set(Calendar.DAY_OF_MONTH, bCal.get(Calendar.DAY_OF_MONTH))
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    if (next.before(now)) next.add(Calendar.YEAR, 1)
-    // If today
-    val todayStart = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }
-    return ((next.timeInMillis - todayStart.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+    // MonthDay.atYear resolves Feb 29 to Feb 28 in a non-leap year instead of rolling into March.
+    var next = monthDay.atYear(today.year)
+    if (next.isBefore(today)) next = monthDay.atYear(today.year + 1)
+
+    return ChronoUnit.DAYS.between(today, next).toInt()
 }
 
 /** Calculates the age the person will turn on their next birthday. */
