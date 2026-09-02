@@ -12,20 +12,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.data.Birthday
 import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicButton
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.neumorphic
+import com.example.ui.components.rememberExactAlarmPermissionState
+import com.example.ui.components.rememberNotificationsPermissionState
 import com.example.viewmodel.GlimmerViewModel
 import com.example.viewmodel.ageOnNextBirthday
 import com.example.viewmodel.daysUntilBirthday
@@ -45,6 +50,15 @@ fun HomeScreen(
     // Split into today's birthdays and upcoming
     val todayBirthdays = filteredBirthdays.filter { daysUntilBirthday(it) == 0 }
     val upcomingBirthdays = filteredBirthdays.filter { daysUntilBirthday(it) > 0 }
+
+    // Reflects the REAL, current system permission state (unlike a stored preference, these can
+    // change outside the app — e.g. the user revokes notifications from system Settings) so the
+    // warning shows up whenever reminders genuinely can't fire, not just right after onboarding.
+    val context = LocalContext.current
+    val notificationsGranted by rememberNotificationsPermissionState(context)
+    val exactAlarmsGranted by rememberExactAlarmPermissionState(context)
+    var reminderWarningDismissed by remember { mutableStateOf(false) }
+    val showReminderWarning = (!notificationsGranted || !exactAlarmsGranted) && !reminderWarningDismissed
 
     Scaffold(
         topBar = {
@@ -148,6 +162,16 @@ fun HomeScreen(
                 }
             }
 
+            // ── Reminder health warning ────────────────────────────────────
+            if (showReminderWarning) {
+                item {
+                    ReminderHealthBanner(
+                        onFixClick = onNavigateToNotifications,
+                        onDismiss = { reminderWarningDismissed = true }
+                    )
+                }
+            }
+
             // ── Today's Birthdays ─────────────────────────────────────────
             if (todayBirthdays.isNotEmpty()) {
                 item {
@@ -199,6 +223,51 @@ fun HomeScreen(
             }
 
             item { Spacer(modifier = Modifier.height(96.dp)) }
+        }
+    }
+}
+
+/**
+ * Shown when the app can't reliably fire reminders — either POST_NOTIFICATIONS is blocked, or
+ * exact alarms aren't available (see NotificationScheduler.canScheduleExactAlarms). This is the
+ * one place the real, current permission state surfaces; it's not a one-time onboarding prompt,
+ * since either permission can be revoked from system Settings at any time after being granted.
+ */
+@Composable
+private fun ReminderHealthBanner(onFixClick: () -> Unit, onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .neumorphic(cornerRadius = 16.dp, shapeBackgroundColor = MaterialTheme.colorScheme.errorContainer)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Reminders may not fire", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                Text(
+                    "A permission Glimmer needs is turned off",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            TextButton(onClick = onFixClick) {
+                Text("Fix", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

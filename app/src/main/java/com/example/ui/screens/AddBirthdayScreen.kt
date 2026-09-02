@@ -1,9 +1,5 @@
 package com.example.ui.screens
 
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -54,7 +50,9 @@ fun AddBirthdayScreen(
     var showRelationshipDropdown by remember { mutableStateOf(false) }
     val relationships = listOf("Family", "Friend", "Partner", "Colleague", "Other")
 
-    var reminderType by remember { mutableStateOf("1 day before") }
+    // Seeded from the app-wide default set in Notifications settings (falls back to whatever
+    // that StateFlow's own initial value is if DataStore's first read hasn't landed yet).
+    var reminderType by remember { mutableStateOf(viewModel.defaultReminderTime.value) }
     var showReminderDropdown by remember { mutableStateOf(false) }
     val reminderOptions = listOf("On the day", "1 day before", "3 days before", "1 week before")
 
@@ -68,11 +66,6 @@ fun AddBirthdayScreen(
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
     }
-
-    // Notification permission launcher (Android 13+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* proceed regardless */ }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -305,10 +298,11 @@ fun AddBirthdayScreen(
                     relationshipError = relationship.isBlank()
 
                     if (!nameError && !dateError && !relationshipError) {
-                        // Request notification permission on Android 13+
-                        if (notificationsEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
+                        // Notification permission is primed once at app launch (MainActivity) and
+                        // surfaced by a banner on Home if it's missing — not requested here, since
+                        // this button navigates back in the same click, which would tear down the
+                        // screen (and its permission launcher) before any system dialog's result
+                        // could come back.
                         viewModel.insertBirthday(
                             Birthday(
                                 name = name.trim(),

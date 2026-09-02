@@ -1,9 +1,5 @@
 package com.example.ui.screens
 
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -42,7 +38,7 @@ fun EditBirthdayScreen(
     viewModel: GlimmerViewModel,
     onNavigateBack: () -> Unit
 ) {
-    val birthdayState by viewModel.getBirthdayById(id).collectAsState()
+    val birthdayState by remember(id) { viewModel.getBirthdayById(id) }.collectAsState()
     val birthday = birthdayState
 
     // Wait until birthday is loaded
@@ -77,10 +73,6 @@ fun EditBirthdayScreen(
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
     }
-
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -273,9 +265,9 @@ fun EditBirthdayScreen(
                     nameError = name.isBlank()
                     dateError = dateOfBirth == null
                     if (!nameError && !dateError) {
-                        if (notificationsEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
+                        // See AddBirthdayScreen: notification permission is primed at app launch
+                        // and surfaced by a Home banner, not requested from a button that
+                        // navigates back (and tears this screen down) in the same click.
                         viewModel.updateBirthday(
                             birthday.copy(
                                 name = name.trim(),

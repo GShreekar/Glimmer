@@ -5,10 +5,14 @@
     <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Exact alarm permissions -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!--
+      Exact alarm permission. USE_EXACT_ALARM is deliberately not requested: it is auto-granted
+      but Play restricts it to apps whose core function IS alarms/timers/calendars, and a birthday
+      reminder app is a borderline case that risks rejection at review. SCHEDULE_EXACT_ALARM is
+      the standard, user-grantable alternative — see NotificationScheduler.canScheduleExactAlarms
+      and requestExactAlarmPermission for the runtime grant flow this requires on API 31+.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Reschedule alarms after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

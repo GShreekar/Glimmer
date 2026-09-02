@@ -17,7 +17,12 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
         val db = AppDatabase.getDatabase(context)
+        val settings = SettingsRepository.getInstance(context)
         CoroutineScope(Dispatchers.IO).launch {
+            // Respect the global toggle: if the user turned all reminders off, don't re-arm any
+            // of them just because the device rebooted.
+            if (!settings.notificationsEnabled.first()) return@launch
+
             val birthdays = db.birthdayDao().getAllBirthdays().first()
             birthdays.forEach { birthday ->
                 if (birthday.reminderEnabled) {

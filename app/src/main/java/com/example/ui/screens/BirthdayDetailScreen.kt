@@ -43,7 +43,7 @@ fun BirthdayDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit
 ) {
-    val birthdayState by viewModel.getBirthdayById(id).collectAsState()
+    val birthdayState by remember(id) { viewModel.getBirthdayById(id) }.collectAsState()
     val birthday = birthdayState
     var showDeleteDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
