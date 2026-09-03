@@ -63,6 +63,18 @@ fun CalendarScreen(
     // week on a different day.
     val firstDayOfWeek = remember { Calendar.getInstance().firstDayOfWeek }
 
+    // Hoisted out of the LazyVerticalGrid content block below: that block is a LazyGridScope
+    // lambda, not a @Composable one, so stringArrayResource()/remember() can't be called from
+    // inside it directly (only from within an item {}/items {} body).
+    // calendar_weekday_abbreviations is declared Sunday-first; rotate it to start at the locale's
+    // actual first day of week (Calendar.SUNDAY == 1, so firstDayOfWeek - 1 is that day's 0-based
+    // offset into the array).
+    val allWeekDays = stringArrayResource(R.array.calendar_weekday_abbreviations)
+    val weekDays = remember(allWeekDays, firstDayOfWeek) {
+        val offset = firstDayOfWeek - Calendar.SUNDAY
+        allWeekDays.drop(offset) + allWeekDays.take(offset)
+    }
+
     val daysInMonth = currentCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
     val tempCal = currentCalendar.clone() as Calendar
     tempCal.set(Calendar.DAY_OF_MONTH, 1)
@@ -179,14 +191,6 @@ fun CalendarScreen(
                         contentPadding = PaddingValues(vertical = 8.dp),
                         userScrollEnabled = false
                     ) {
-                        // calendar_weekday_abbreviations is declared Sunday-first; rotate it to
-                        // start at the locale's actual first day of week (Calendar.SUNDAY == 1,
-                        // so firstDayOfWeek - 1 is that day's 0-based offset into the array).
-                        val allWeekDays = stringArrayResource(R.array.calendar_weekday_abbreviations)
-                        val weekDays = remember(allWeekDays, firstDayOfWeek) {
-                            val offset = firstDayOfWeek - Calendar.SUNDAY
-                            allWeekDays.drop(offset) + allWeekDays.take(offset)
-                        }
                         items(weekDays) { day ->
                             Text(
                                 text = day,

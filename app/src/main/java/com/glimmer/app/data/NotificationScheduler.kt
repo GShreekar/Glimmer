@@ -36,15 +36,16 @@ object NotificationScheduler {
     const val EXTRA_DAYS_BEFORE = "days_before"
     const val ACTION_SNOOZE = "com.glimmer.app.ACTION_SNOOZE"
 
-    private const val SNOOZE_HOURS = 3L
+    // Not private: BirthdayAlarmReceiver (a separate top-level class in this file) needs these too.
+    const val SNOOZE_HOURS = 3L
     // Large, disjoint bases so a message/call/snooze PendingIntent for one person can never
     // collide with a scheduled-reminder PendingIntent for another (see requestCode below) — the
     // request code alone doesn't strictly need to be globally unique (differing Intent data/action
     // already disambiguates them), but keeping the ranges disjoint makes that obviously true
     // rather than relying on it.
-    private const val REQUEST_CODE_MESSAGE_BASE = 2_000_000
-    private const val REQUEST_CODE_CALL_BASE = 3_000_000
-    private const val REQUEST_CODE_SNOOZE_BASE = 4_000_000
+    const val REQUEST_CODE_MESSAGE_BASE = 2_000_000
+    const val REQUEST_CODE_CALL_BASE = 3_000_000
+    const val REQUEST_CODE_SNOOZE_BASE = 4_000_000
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -322,11 +323,11 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            REQUEST_CODE_SNOOZE_BASE + birthdayId,
+            NotificationScheduler.REQUEST_CODE_SNOOZE_BASE + birthdayId,
             snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val triggerAt = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(SNOOZE_HOURS)
+        val triggerAt = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(NotificationScheduler.SNOOZE_HOURS)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         try {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
@@ -409,14 +410,14 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
                 putExtra("sms_body", "Happy Birthday ${birthday.name}! 🎂🎉")
             }
             val smsPending = PendingIntent.getActivity(
-                context, REQUEST_CODE_MESSAGE_BASE + birthdayId, smsIntent,
+                context, NotificationScheduler.REQUEST_CODE_MESSAGE_BASE + birthdayId, smsIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             builder.addAction(R.drawable.ic_notification, context.getString(R.string.detail_action_message), smsPending)
 
             val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
             val dialPending = PendingIntent.getActivity(
-                context, REQUEST_CODE_CALL_BASE + birthdayId, dialIntent,
+                context, NotificationScheduler.REQUEST_CODE_CALL_BASE + birthdayId, dialIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             builder.addAction(R.drawable.ic_notification, context.getString(R.string.detail_action_call), dialPending)
@@ -429,7 +430,7 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             putExtra(NotificationScheduler.EXTRA_DAYS_BEFORE, daysBefore)
         }
         val snoozePending = PendingIntent.getBroadcast(
-            context, REQUEST_CODE_SNOOZE_BASE + birthdayId, snoozeIntent,
+            context, NotificationScheduler.REQUEST_CODE_SNOOZE_BASE + birthdayId, snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         builder.addAction(R.drawable.ic_notification, context.getString(R.string.notif_action_snooze), snoozePending)

@@ -40,7 +40,7 @@ object DatabaseEncryptionMigrator {
 
         val tempFile = File(parent, dbFile.name + ".migrating").apply { delete() }
         var plaintext: SQLiteDatabase? = null
-        try {
+        return try {
             plaintext = SQLiteDatabase.openDatabase(dbFile.path, "", null, SQLiteDatabase.OPEN_READWRITE)
             val hexKey = passphrase.joinToString("") { "%02x".format(it) }
             plaintext.rawExecSQL("ATTACH DATABASE '${tempFile.path}' AS encrypted KEY \"x'$hexKey'\"")
