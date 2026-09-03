@@ -10,8 +10,8 @@ import com.glimmer.app.data.Birthday
 import com.glimmer.app.data.BirthdayRepository
 import com.glimmer.app.data.GLog
 import com.glimmer.app.data.NotificationScheduler
+import com.glimmer.app.data.Reminder
 import com.glimmer.app.data.SettingsRepository
-import com.glimmer.app.data.birthLocalDate
 import com.glimmer.app.data.birthMonthDay
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -141,21 +141,7 @@ class GlimmerViewModel(
             settingsRepository.setNotificationsEnabled(enabled)
             // Flipping the global switch has to actually (dis)arm every alarm immediately —
             // otherwise turning it off would look like it worked while every reminder kept firing.
-            val birthdays = repository.allBirthdays.first()
-            if (enabled) {
-                val hour = settingsRepository.reminderHour.first()
-                val minute = settingsRepository.reminderMinute.first()
-                birthdays.forEach { birthday ->
-                    if (birthday.reminderEnabled) {
-                        val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-                        NotificationScheduler.scheduleReminder(getApplication(), birthday, offset, hour, minute)
-                    }
-                }
-            } else {
-                birthdays.forEach { birthday ->
-                    NotificationScheduler.cancelReminder(getApplication(), birthday.id)
-                }
-            }
+            rescheduleEveryBirthday(onlyIfNotificationsEnabled = false, forceDisableAll = !enabled)
         }
     }
 
@@ -179,12 +165,21 @@ class GlimmerViewModel(
     fun setReminderTimeOfDay(hour: Int, minute: Int) {
         viewModelScope.launch(viewModelExceptionHandler) {
             settingsRepository.setReminderTimeOfDay(hour, minute)
-            if (!settingsRepository.notificationsEnabled.first()) return@launch
-            repository.allBirthdays.first().forEach { birthday ->
-                if (birthday.reminderEnabled) {
-                    val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-                    NotificationScheduler.scheduleReminder(getApplication(), birthday, offset, hour, minute)
-                }
+            rescheduleEveryBirthday(onlyIfNotificationsEnabled = true, forceDisableAll = false)
+        }
+    }
+
+    /** Re-arms (or cancels) every person's reminders — used when a global setting changes. */
+    private suspend fun rescheduleEveryBirthday(onlyIfNotificationsEnabled: Boolean, forceDisableAll: Boolean) {
+        if (onlyIfNotificationsEnabled && !settingsRepository.notificationsEnabled.first()) return
+        val hour = settingsRepository.reminderHour.first()
+        val minute = settingsRepository.reminderMinute.first()
+        repository.allBirthdays.first().forEach { birthday ->
+            if (forceDisableAll) {
+                NotificationScheduler.cancelAllReminders(getApplication(), birthday.id)
+            } else {
+                val reminders = repository.getRemindersForBirthdayOnce(birthday.id)
+                NotificationScheduler.rescheduleAll(getApplication(), birthday, reminders, hour, minute)
             }
         }
     }
@@ -217,27 +212,56 @@ class GlimmerViewModel(
     suspend fun isDuplicateBirthday(name: String, dateOfBirth: Long, excludeId: Int = -1): Boolean =
         repository.existsByNameAndDate(name, dateOfBirth, excludeId)
 
-    fun insertBirthday(birthday: Birthday) {
+    /**
+     * FEAT-04: [reminderOffsets] is the full set of days-before offsets this person should be
+     * reminded at (e.g. {7, 1} for "a week before to shop, the day before as a nudge") — replaces
+     * the old single `reminderTime` string entirely for scheduling purposes.
+     */
+    fun insertBirthday(birthday: Birthday, reminderOffsets: Set<Int> = emptySet()) {
         viewModelScope.launch(viewModelExceptionHandler) {
             // Room assigns the real primary key here; the incoming `birthday` still carries the
             // default id = 0. Scheduling with that would collide with every other new birthday's
             // alarm (they'd all share PendingIntent request code 0).
             val newId = repository.insert(birthday).toInt()
+            repository.setReminders(newId, reminderOffsets.toList())
             scheduleNotification(birthday.copy(id = newId))
         }
     }
 
-    fun updateBirthday(birthday: Birthday) {
+    fun updateBirthday(birthday: Birthday, reminderOffsets: Set<Int>) {
         viewModelScope.launch(viewModelExceptionHandler) {
             repository.update(birthday)
+            repository.setReminders(birthday.id, reminderOffsets.toList())
             scheduleNotification(birthday)
         }
     }
 
-    // Holds the just-deleted row so undoDelete() can restore it. A single in-memory slot is
-    // enough — there's only ever one "undo" affordance live at a time (the most recent delete),
-    // and it's implicitly cleared by being overwritten on the next delete.
-    private var lastDeleted: Birthday? = null
+    /** FEAT-02: bulk-inserts an entire Contacts import in one go, skipping exact duplicates. */
+    suspend fun importBirthdays(candidates: List<Birthday>): Int {
+        var imported = 0
+        candidates.forEach { candidate ->
+            if (!repository.existsByNameAndDate(candidate.name, candidate.dateOfBirth)) {
+                val newId = repository.insert(candidate).toInt()
+                if (candidate.reminderEnabled) {
+                    val offset = NotificationScheduler.reminderTimeToOffset(settingsRepository.defaultReminderTime.first())
+                    repository.setReminders(newId, listOf(offset))
+                    scheduleNotification(candidate.copy(id = newId))
+                }
+                imported++
+            }
+        }
+        // ImportContactsScreen navigates back the moment this returns, tearing down its own
+        // SnackbarHost — the confirmation goes out on the same shared channel Add/Edit's failure
+        // events use, which HomeScreen (still around after the navigation) renders as a snackbar.
+        if (imported > 0) _events.tryEmit(UiEvent.ImportSuccess(imported))
+        return imported
+    }
+
+    // Holds the just-deleted row (and its reminder offsets, since those are cascade-deleted with
+    // it) so undoDelete() can restore both. A single in-memory slot is enough — there's only ever
+    // one "undo" affordance live at a time (the most recent delete), and it's implicitly cleared
+    // by being overwritten on the next delete.
+    private var lastDeleted: Pair<Birthday, List<Int>>? = null
 
     private val _deleteEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
@@ -247,22 +271,26 @@ class GlimmerViewModel(
     fun deleteBirthday(id: Int) {
         viewModelScope.launch(viewModelExceptionHandler) {
             val birthday = allBirthdays.value.firstOrNull { it.id == id }
-            lastDeleted = birthday
-            NotificationScheduler.cancelReminder(getApplication(), id)
-            repository.deleteById(id)
+            if (birthday != null) {
+                val offsets = repository.getRemindersForBirthdayOnce(id).map { it.daysBefore }
+                lastDeleted = birthday to offsets
+            }
+            NotificationScheduler.cancelAllReminders(getApplication(), id)
+            repository.deleteById(id) // reminders row cascade-deletes with it
             birthday?.let { _deleteEvents.emit(it.name) }
         }
     }
 
     /**
      * Re-inserts the most recently deleted birthday (a fresh row — the original id is gone with
-     * the delete, so this behaves like adding it again, alarm included) and re-arms its reminder.
-     * No-op if nothing was deleted since the last undo, or another delete has since overwritten it.
+     * the delete, so this behaves like adding it again, alarm included) with the same reminder
+     * offsets it had, and re-arms them. No-op if nothing was deleted since the last undo, or
+     * another delete has since overwritten it.
      */
     fun undoDelete() {
-        val birthday = lastDeleted ?: return
+        val (birthday, offsets) = lastDeleted ?: return
         lastDeleted = null
-        insertBirthday(birthday.copy(id = 0))
+        insertBirthday(birthday.copy(id = 0), offsets.toSet())
     }
 
     /**
@@ -282,32 +310,47 @@ class GlimmerViewModel(
         initialValue = null
     )
 
+    /**
+     * FEAT-04: this person's configured reminder offsets. Same `remember(id)` rule as
+     * [getBirthdayById] — and the same reason for a nullable "not loaded yet" initial value
+     * rather than emptyList(): a caller seeding a local editable Set from the first emission
+     * needs to tell "hasn't answered yet" apart from "this person genuinely has zero reminders".
+     */
+    fun getRemindersForBirthday(id: Int): StateFlow<List<Reminder>?> = repository.getRemindersForBirthday(id).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
     private suspend fun scheduleNotification(birthday: Birthday) {
-        if (!settingsRepository.notificationsEnabled.first()) {
-            // Global toggle is off: make sure this birthday doesn't have a stray alarm armed
-            // rather than silently scheduling one that the user has already said they don't want.
-            NotificationScheduler.cancelReminder(getApplication(), birthday.id)
+        if (!settingsRepository.notificationsEnabled.first() || !birthday.reminderEnabled) {
+            // Global toggle is off, or this person's own switch is off: make sure nothing of
+            // theirs is armed rather than silently scheduling reminders the user doesn't want.
+            NotificationScheduler.cancelAllReminders(getApplication(), birthday.id)
             return
         }
-        val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-        NotificationScheduler.scheduleReminder(
-            getApplication(), birthday, offset,
+        val reminders = repository.getRemindersForBirthdayOnce(birthday.id)
+        NotificationScheduler.rescheduleAll(
+            getApplication(), birthday, reminders,
             hour24 = settingsRepository.reminderHour.first(),
             minute = settingsRepository.reminderMinute.first()
         )
     }
 }
 
-/** A one-shot event a screen renders and then forgets — currently just the generic failure case. */
+/** A one-shot event a screen renders and then forgets. */
 sealed interface UiEvent {
     data class Error(@StringRes val messageRes: Int) : UiEvent
+    /** FEAT-02: how many birthdays a Contacts import just added — always > 0 when emitted. */
+    data class ImportSuccess(val count: Int) : UiEvent
 }
 
 /** A [Birthday] plus the per-day-dependent values HomeScreen renders, computed once in the ViewModel. */
 data class BirthdayUi(
     val birthday: Birthday,
     val daysUntil: Int,
-    val ageTurning: Int
+    // FEAT-05: null when the birth year isn't known — HomeScreen hides "Turning N" for these.
+    val ageTurning: Int?
 )
 
 data class HomeUiState(
@@ -333,16 +376,17 @@ fun daysUntilBirthday(birthday: Birthday, today: LocalDate = LocalDate.now()): I
 }
 
 /**
- * The age the person turns on their next birthday — or turns today, if today is the day.
+ * The age the person turns on their next birthday — or turns today, if today is the day. Returns
+ * null when [Birthday.birthYear] isn't known (FEAT-05) — there is no meaningful age to show.
  *
  * `today` counts as "already happened", not "about to happen": someone born in 2000 turns 26,
  * not 27, on their birthday itself.
  */
-fun ageOnNextBirthday(birthday: Birthday, today: LocalDate = LocalDate.now()): Int {
-    val birth = birthday.birthLocalDate()
-    val thisYear = MonthDay.from(birth).atYear(today.year)
+fun ageOnNextBirthday(birthday: Birthday, today: LocalDate = LocalDate.now()): Int? {
+    val birthYear = birthday.birthYear ?: return null
+    val thisYear = birthday.birthMonthDay().atYear(today.year)
     val nextOccurrenceYear = if (thisYear.isBefore(today)) today.year + 1 else today.year
-    return nextOccurrenceYear - birth.year
+    return nextOccurrenceYear - birthYear
 }
 
 class GlimmerViewModelFactory(

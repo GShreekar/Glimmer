@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
 import com.glimmer.app.ui.screens.HomeScreen
 import com.glimmer.app.ui.screens.AddBirthdayScreen
@@ -18,6 +19,7 @@ import com.glimmer.app.ui.screens.EditBirthdayScreen
 import com.glimmer.app.ui.screens.CalendarScreen
 import com.glimmer.app.ui.screens.SettingsScreen
 import com.glimmer.app.ui.screens.BirthdayDetailScreen
+import com.glimmer.app.ui.screens.ImportContactsScreen
 import com.glimmer.app.viewmodel.GlimmerViewModel
 import com.glimmer.app.ui.components.BottomNavBar
 import kotlinx.serialization.Serializable
@@ -29,6 +31,7 @@ import kotlinx.serialization.Serializable
 @Serializable object NotificationsRoute
 @Serializable object ProfileRoute
 @Serializable object SyncBackupRoute
+@Serializable object ImportRoute
 @Serializable data class DetailRoute(val id: Int)
 @Serializable data class EditRoute(val id: Int)
 
@@ -64,7 +67,14 @@ fun GlimmerApp(viewModel: GlimmerViewModel) {
                     onNavigateToDetail = { id -> navController.navigate(DetailRoute(id)) },
                     onNavigateToAdd = { navController.navigate(AddRoute) },
                     onNavigateToNotifications = { navController.navigate(NotificationsRoute) },
-                    onNavigateToProfile = { navController.navigate(ProfileRoute) }
+                    onNavigateToProfile = { navController.navigate(ProfileRoute) },
+                    onNavigateToImport = { navController.navigate(ImportRoute) }
+                )
+            }
+            composable<ImportRoute> {
+                ImportContactsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable<AddRoute> {
@@ -111,7 +121,12 @@ fun GlimmerApp(viewModel: GlimmerViewModel) {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-            composable<DetailRoute> { backStackEntry ->
+            // FEAT-03: matches glimmer://birthday/<id>, the tap target NotificationScheduler
+            // builds for a fired reminder — lands straight on this person's Detail screen instead
+            // of just opening Home and making the user find them again.
+            composable<DetailRoute>(
+                deepLinks = listOf(navDeepLink<DetailRoute>(basePath = "glimmer://birthday"))
+            ) { backStackEntry ->
                 val detailRoute = backStackEntry.toRoute<DetailRoute>()
                 BirthdayDetailScreen(
                     id = detailRoute.id,

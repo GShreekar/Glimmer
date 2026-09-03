@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.util.concurrent.TimeUnit
 
 object NotificationScheduler {
 
@@ -33,6 +34,17 @@ object NotificationScheduler {
     const val EXTRA_BIRTHDAY_NAME = "birthday_name"
     const val EXTRA_BIRTHDAY_ID = "birthday_id"
     const val EXTRA_DAYS_BEFORE = "days_before"
+    const val ACTION_SNOOZE = "com.glimmer.app.ACTION_SNOOZE"
+
+    private const val SNOOZE_HOURS = 3L
+    // Large, disjoint bases so a message/call/snooze PendingIntent for one person can never
+    // collide with a scheduled-reminder PendingIntent for another (see requestCode below) — the
+    // request code alone doesn't strictly need to be globally unique (differing Intent data/action
+    // already disambiguates them), but keeping the ranges disjoint makes that obviously true
+    // rather than relying on it.
+    private const val REQUEST_CODE_MESSAGE_BASE = 2_000_000
+    private const val REQUEST_CODE_CALL_BASE = 3_000_000
+    private const val REQUEST_CODE_SNOOZE_BASE = 4_000_000
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -61,24 +73,21 @@ object NotificationScheduler {
         }
     }
 
+    /** FEAT-04: a stable, collision-free request code derived from (person, offset) alone. */
+    private fun requestCode(birthdayId: Int, offset: ReminderOffset): Int = birthdayId * 10 + offset.ordinal
+
     /**
-     * Schedules or re-schedules a birthday reminder alarm.
-     * @param daysBeforeOffset 0 = on the day, 1 = 1 day before, etc.
+     * Schedules or re-schedules one person's reminder for one offset.
      * @param hour24 hour of day (0-23) the reminder should fire at — the user's configured time
-     *   from Notifications settings (defaults to [SettingsRepository.DEFAULT_REMINDER_HOUR]),
-     *   previously a fixed 09:00 with no way to change it.
+     *   from Notifications settings (defaults to [SettingsRepository.DEFAULT_REMINDER_HOUR]).
      */
     fun scheduleReminder(
         context: Context,
         birthday: Birthday,
-        daysBeforeOffset: Int = 1,
+        offset: ReminderOffset,
         hour24: Int = SettingsRepository.DEFAULT_REMINDER_HOUR,
         minute: Int = SettingsRepository.DEFAULT_REMINDER_MINUTE
     ) {
-        if (!birthday.reminderEnabled) {
-            cancelReminder(context, birthday.id)
-            return
-        }
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         // birthMonthDay() reads Birthday.dateOfBirth as UTC — the convention it's stored in —
@@ -93,7 +102,7 @@ object NotificationScheduler {
         // with a 1-week-before reminder targets Dec 29 of the *previous* year).
         fun targetFor(occurrenceYear: Int): ZonedDateTime =
             monthDay.atYear(occurrenceYear)
-                .minusDays(daysBeforeOffset.toLong())
+                .minusDays(offset.daysBefore.toLong())
                 .atTime(hour24, minute)
                 .atZone(zone)
 
@@ -106,10 +115,11 @@ object NotificationScheduler {
             target = targetFor(occurrenceYear)
         }
 
+        val requestCode = requestCode(birthday.id, offset)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            birthday.id,
-            alarmIntent(context, birthday, daysBeforeOffset),
+            requestCode,
+            alarmIntent(context, birthday, offset),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -136,44 +146,72 @@ object NotificationScheduler {
         } catch (e: SecurityException) {
             // Thrown if canScheduleExactAlarms() was true when checked above but the permission
             // was revoked in the tiny window before this call (or on OEM builds that lie about
-            // it). Previously swallowed with no trace at all — logged now so a "why is this
-            // reminder late" report is diagnosable — then falls back to an inexact alarm rather
-            // than not scheduling anything.
+            // it). Logged so a "why is this reminder late" report is diagnosable, then falls back
+            // to an inexact alarm rather than not scheduling anything.
             GLog.w("Scheduler", "setExactAndAllowWhileIdle denied for birthdayId=${birthday.id}; falling back to an inexact alarm", e)
             alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         }
     }
 
-    fun cancelReminder(context: Context, birthdayId: Int) {
+    fun cancelReminder(context: Context, birthdayId: Int, offset: ReminderOffset) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         // No extras on this Intent — deliberately. PendingIntent.getBroadcast equality (and thus
         // whether this cancels the alarm scheduleReminder registered) is based on the Intent's
         // component/action/data/categories plus the request code, NOT its extras, so a bare
-        // Intent with a matching request code (birthdayId) still matches the one that was armed.
+        // Intent with a matching request code still matches the one that was armed.
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            birthdayId,
-            alarmIntent(context),
+            requestCode(birthdayId, offset),
+            alarmIntent(context, birthday = null, offset = null),
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         )
         pendingIntent?.let { alarmManager.cancel(it) }
     }
 
+    /** Cancels every possible offset's alarm for this person — used when a person is deleted. */
+    fun cancelAllReminders(context: Context, birthdayId: Int) {
+        ReminderOffset.entries.forEach { cancelReminder(context, birthdayId, it) }
+    }
+
+    /**
+     * FEAT-04: reconciles AlarmManager with the current `reminders` table for this person —
+     * schedules an alarm for every currently-selected offset, cancels every other possible
+     * offset's alarm. This is idempotent and is how an edit (adding/removing offsets, or turning
+     * the master switch off) takes effect, and it's also safe to call on every alarm fire (a
+     * reminder that hasn't occurred yet this cycle is simply re-registered at the same target
+     * time — a no-op in practice).
+     */
+    fun rescheduleAll(context: Context, birthday: Birthday, reminders: List<Reminder>, hour24: Int, minute: Int) {
+        val selected = reminders.mapNotNull { ReminderOffset.fromDaysBefore(it.daysBefore) }.toSet()
+        ReminderOffset.entries.forEach { offset ->
+            if (birthday.reminderEnabled && offset in selected) {
+                scheduleReminder(context, birthday, offset, hour24, minute)
+            } else {
+                cancelReminder(context, birthday.id, offset)
+            }
+        }
+    }
+
     /**
      * Builds the [BirthdayAlarmReceiver] Intent shared by [scheduleReminder] and [cancelReminder].
-     * `birthday`/`daysBeforeOffset` are omitted when only cancelling — see the comment above.
+     * `birthday`/`offset` are omitted when only cancelling — see the comment there.
      */
-    private fun alarmIntent(context: Context, birthday: Birthday? = null, daysBeforeOffset: Int = 0): Intent =
+    private fun alarmIntent(context: Context, birthday: Birthday?, offset: ReminderOffset?): Intent =
         Intent(context, BirthdayAlarmReceiver::class.java).apply {
-            if (birthday != null) {
+            if (birthday != null && offset != null) {
                 putExtra(EXTRA_BIRTHDAY_NAME, birthday.name)
                 putExtra(EXTRA_BIRTHDAY_ID, birthday.id)
                 // So the notification's copy can say "today" / "tomorrow" / "in N days"
                 // correctly — without this the receiver can't tell which offset fired.
-                putExtra(EXTRA_DAYS_BEFORE, daysBeforeOffset)
+                putExtra(EXTRA_DAYS_BEFORE, offset.daysBefore)
             }
         }
 
+    /**
+     * Maps the "Default Reminder" setting's display string (SettingsRepository.defaultReminderTime)
+     * to a days-before offset — used to seed a new person's reminder chips. Unrelated to (and not
+     * to be confused with) the deprecated Birthday.reminderTime column, which this no longer reads.
+     */
     fun reminderTimeToOffset(reminderTime: String): Int = when (reminderTime) {
         "On the day" -> 0
         "1 day before" -> 1
@@ -210,9 +248,14 @@ object NotificationScheduler {
 
 class BirthdayAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val name = intent.getStringExtra(NotificationScheduler.EXTRA_BIRTHDAY_NAME) ?: "Someone"
         val birthdayId = intent.getIntExtra(NotificationScheduler.EXTRA_BIRTHDAY_ID, 0)
+        val name = intent.getStringExtra(NotificationScheduler.EXTRA_BIRTHDAY_NAME) ?: "Someone"
         val daysBefore = intent.getIntExtra(NotificationScheduler.EXTRA_DAYS_BEFORE, 0)
+
+        if (intent.action == NotificationScheduler.ACTION_SNOOZE) {
+            handleSnooze(context, birthdayId, name, daysBefore)
+            return
+        }
 
         // setExactAndAllowWhileIdle is one-shot: without re-arming here, this person's reminder
         // would never fire again. goAsync() keeps the process alive long enough for the settings
@@ -229,10 +272,15 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val settings = SettingsRepository.getInstance(context)
+                val db = AppDatabase.getDatabase(context)
+                // FEAT-03: the birthday itself is fetched up front (not just at re-arm time, as
+                // before) so the notification can carry working Message/Call actions.
+                val birthday = db.birthdayDao().getBirthdayById(birthdayId).first()
+
                 try {
                     val soundEnabled = settings.soundEnabled.first()
                     val showOnLockScreen = settings.showOnLockScreen.first()
-                    postNotification(context, birthdayId, name, daysBefore, soundEnabled, showOnLockScreen)
+                    postNotification(context, birthday, birthdayId, name, daysBefore, soundEnabled, showOnLockScreen)
                 } catch (t: Throwable) {
                     GLog.e("Alarm", "Failed to post the notification for birthdayId=$birthdayId", t)
                 }
@@ -241,21 +289,17 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
                     // Only re-arm if the global toggle is still on — otherwise this birthday's
                     // alarm stays cancelled, matching whatever the user set in Notifications
                     // settings.
-                    if (settings.notificationsEnabled.first()) {
-                        val birthday = AppDatabase.getDatabase(context).birthdayDao()
-                            .getBirthdayById(birthdayId).first()
-                        if (birthday != null && birthday.reminderEnabled) {
-                            val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-                            NotificationScheduler.scheduleReminder(
-                                context, birthday, offset,
-                                hour24 = settings.reminderHour.first(),
-                                minute = settings.reminderMinute.first()
-                            )
-                        }
+                    if (settings.notificationsEnabled.first() && birthday != null && birthday.reminderEnabled) {
+                        val reminders = db.reminderDao().getRemindersForBirthdayOnce(birthdayId)
+                        NotificationScheduler.rescheduleAll(
+                            context, birthday, reminders,
+                            hour24 = settings.reminderHour.first(),
+                            minute = settings.reminderMinute.first()
+                        )
                     }
                 } catch (t: Throwable) {
-                    GLog.e("Alarm", "Failed to re-arm the reminder for birthdayId=$birthdayId " +
-                        "after it fired — it will not fire again until the app is opened or " +
+                    GLog.e("Alarm", "Failed to re-arm reminders for birthdayId=$birthdayId " +
+                        "after one fired — it will not fire again until the app is opened or " +
                         "the device reboots", t)
                 }
             } finally {
@@ -264,8 +308,36 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /** FEAT-03: "Remind me later" — dismiss now, re-post the same notification in a few hours. */
+    private fun handleSnooze(context: Context, birthdayId: Int, name: String, daysBefore: Int) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(birthdayId)
+
+        val snoozeIntent = Intent(context, BirthdayAlarmReceiver::class.java).apply {
+            putExtra(NotificationScheduler.EXTRA_BIRTHDAY_ID, birthdayId)
+            putExtra(NotificationScheduler.EXTRA_BIRTHDAY_NAME, name)
+            putExtra(NotificationScheduler.EXTRA_DAYS_BEFORE, daysBefore)
+            // No action set: when this fires, onReceive falls through to the normal path above,
+            // which re-posts the notification and (harmlessly) re-arms next year's occurrence.
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_SNOOZE_BASE + birthdayId,
+            snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val triggerAt = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(SNOOZE_HOURS)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        } catch (e: SecurityException) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+    }
+
     private fun postNotification(
         context: Context,
+        birthday: Birthday?,
         birthdayId: Int,
         name: String,
         daysBefore: Int,
@@ -279,7 +351,11 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             NotificationScheduler.CHANNEL_ID_SILENT
         }
 
-        val tapIntent = Intent(context, MainActivity::class.java).apply {
+        // FEAT-03: deep-links straight to this person's Detail screen (glimmer://birthday/<id>,
+        // matched by DetailRoute's navDeepLink in GlimmerApp.kt) instead of just opening Home —
+        // "tap to send a wish" used to mean tapping, then finding the person again by hand.
+        val deepLinkUri = Uri.parse("glimmer://birthday/$birthdayId")
+        val tapIntent = Intent(Intent.ACTION_VIEW, deepLinkUri, context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val tapPendingIntent = PendingIntent.getActivity(
@@ -323,6 +399,40 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             builder.setPublicVersion(publicVersion)
         }
+
+        // FEAT-03: actionable notifications — "Message"/"Call" only when there's a number to
+        // reach (otherwise they'd open an empty composer/dialer, same as BUG-10), "Remind me
+        // later" always available since it needs no data about the person at all.
+        val phone = birthday?.phoneNumber
+        if (!phone.isNullOrBlank()) {
+            val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone")).apply {
+                putExtra("sms_body", "Happy Birthday ${birthday.name}! 🎂🎉")
+            }
+            val smsPending = PendingIntent.getActivity(
+                context, REQUEST_CODE_MESSAGE_BASE + birthdayId, smsIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(R.drawable.ic_notification, context.getString(R.string.detail_action_message), smsPending)
+
+            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+            val dialPending = PendingIntent.getActivity(
+                context, REQUEST_CODE_CALL_BASE + birthdayId, dialIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(R.drawable.ic_notification, context.getString(R.string.detail_action_call), dialPending)
+        }
+
+        val snoozeIntent = Intent(context, BirthdayAlarmReceiver::class.java).apply {
+            action = NotificationScheduler.ACTION_SNOOZE
+            putExtra(NotificationScheduler.EXTRA_BIRTHDAY_ID, birthdayId)
+            putExtra(NotificationScheduler.EXTRA_BIRTHDAY_NAME, name)
+            putExtra(NotificationScheduler.EXTRA_DAYS_BEFORE, daysBefore)
+        }
+        val snoozePending = PendingIntent.getBroadcast(
+            context, REQUEST_CODE_SNOOZE_BASE + birthdayId, snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.addAction(R.drawable.ic_notification, context.getString(R.string.notif_action_snooze), snoozePending)
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(birthdayId, builder.build())

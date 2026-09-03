@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val database = withContext(Dispatchers.IO) { AppDatabase.getDatabase(this@MainActivity) }
-            val repository = BirthdayRepository(database.birthdayDao())
+            val repository = BirthdayRepository(database.birthdayDao(), database.reminderDao())
             val settingsRepository = SettingsRepository.getInstance(this@MainActivity)
             val factory = GlimmerViewModelFactory(application, repository, settingsRepository)
             val viewModel = ViewModelProvider(this@MainActivity, factory)[GlimmerViewModel::class.java]

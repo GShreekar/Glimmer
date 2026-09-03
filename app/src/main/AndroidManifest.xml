@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+      FEAT-02: only requested at runtime when the user explicitly taps "Import from Contacts" —
+      never on first launch, never silently. See ImportContactsScreen / ContactsBirthdayImporter.
+      The contact-linking picker in Add/Edit (FEAT-01) is separate and needs no permission at all.
+    -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!--
       SEC-01: the README promises "100% Offline & Private", but the default (allowBackup=true
       with no rules) is "back everything up" — Android Auto Backup would silently upload the
       entire Room database (every contact's name, birth date, relationship, private notes) to the
@@ -43,6 +50,15 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- FEAT-03: a fired reminder's tap target is glimmer://birthday/<id>, deep-linking
+                 straight to that person's Detail screen (see DetailRoute's navDeepLink in
+                 GlimmerApp.kt) instead of just opening Home. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="glimmer" android:host="birthday" />
             </intent-filter>
         </activity>
 

@@ -42,7 +42,8 @@ fun HomeScreen(
     onNavigateToDetail: (Int) -> Unit,
     onNavigateToAdd: () -> Unit,
     onNavigateToNotifications: () -> Unit,
-    onNavigateToProfile: () -> Unit
+    onNavigateToProfile: () -> Unit,
+    onNavigateToImport: () -> Unit
 ) {
     // PERF-02: today/upcoming partitioning and per-item daysUntil/age are now computed once in
     // the ViewModel (see GlimmerViewModel.homeUiState), not recomputed here on every
@@ -89,6 +90,9 @@ fun HomeScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is UiEvent.Error -> snackbarHostState.showSnackbar(context.getString(event.messageRes))
+                is UiEvent.ImportSuccess -> snackbarHostState.showSnackbar(
+                    context.resources.getQuantityString(R.plurals.import_success_snackbar, event.count, event.count)
+                )
             }
         }
     }
@@ -254,6 +258,11 @@ fun HomeScreen(
                             Icon(Icons.Default.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(48.dp))
                             Text(stringResource(R.string.home_empty_title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                             Text(stringResource(R.string.home_empty_subtitle), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outlineVariant)
+                            // FEAT-02: realistically nobody types in 60 people by hand — this is
+                            // the single biggest lever on whether the app ever gets used at all.
+                            TextButton(onClick = onNavigateToImport) {
+                                Text(stringResource(R.string.home_import_contacts), color = MaterialTheme.colorScheme.primary)
+                            }
                         }
                     }
                 }
@@ -338,7 +347,9 @@ private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
                 Column {
                     Text(birthday.name, style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        stringResource(R.string.home_turning_today, age),
+                        // FEAT-05: age is unknowable without a birth year — show a plain
+                        // celebration line instead of "Turning null today!".
+                        if (age != null) stringResource(R.string.home_turning_today, age) else stringResource(R.string.home_celebrating_today),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.secondary
                     )

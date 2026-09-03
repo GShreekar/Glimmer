@@ -15,13 +15,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +34,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.glimmer.app.R
-import com.glimmer.app.data.Birthday
+import com.glimmer.app.data.placeholderDateOfBirth
+import com.glimmer.app.data.yearOf
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
 import com.glimmer.app.ui.components.NeumorphicSwitch
 import com.glimmer.app.ui.components.NeumorphicTextField
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.ui.components.rememberBirthDatePickerState
+import com.glimmer.app.ui.components.rememberContactPickerLauncher
 import com.glimmer.app.viewmodel.GlimmerViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -65,6 +67,18 @@ fun EditBirthdayScreen(
         return
     }
 
+    // FEAT-04: reminders load as a second, independent query — wait for its first real emission
+    // too (initialValue = null, not emptyList()) so the offset chips below aren't seeded from a
+    // premature "no reminders" snapshot that hasn't actually answered yet.
+    val remindersState by remember(birthday.id) { viewModel.getRemindersForBirthday(birthday.id) }.collectAsState()
+    val loadedReminders = remindersState
+    if (loadedReminders == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        }
+        return
+    }
+
     // Keyed on birthday.id, not the birthday object itself: any background re-emission of the
     // same row from Room (e.g. after a re-arm elsewhere) produces a new Birthday instance with
     // the same id, and remember(birthday) would treat that as a reason to re-seed every field —
@@ -73,10 +87,16 @@ fun EditBirthdayScreen(
     var notificationsEnabled by remember(birthday.id) { mutableStateOf(birthday.reminderEnabled) }
     var notes by remember(birthday.id) { mutableStateOf(birthday.notes ?: "") }
     var phoneNumber by remember(birthday.id) { mutableStateOf(birthday.phoneNumber ?: "") }
+    var contactLookupKey by remember(birthday.id) { mutableStateOf(birthday.contactLookupKey) }
+    val pickContact = rememberContactPickerLauncher { picked ->
+        picked.phoneNumber?.let { phoneNumber = it }
+        contactLookupKey = picked.lookupKey
+    }
 
     var dateOfBirth by remember(birthday.id) { mutableStateOf<Long?>(birthday.dateOfBirth) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberBirthDatePickerState(initialSelectedDateMillis = birthday.dateOfBirth)
+    var yearUnknown by remember(birthday.id) { mutableStateOf(birthday.birthYear == null) }
 
     // See AddBirthdayScreen: the avatar is now tappable and actually saves what's picked.
     var photoUri by remember(birthday.id) { mutableStateOf(birthday.photoUri) }
@@ -88,9 +108,12 @@ fun EditBirthdayScreen(
     var showRelationshipDropdown by remember { mutableStateOf(false) }
     val relationships = listOf("Family", "Friend", "Partner", "Colleague", "Other")
 
-    var reminderType by remember(birthday.id) { mutableStateOf(birthday.reminderTime.ifBlank { "1 day before" }) }
-    var showReminderDropdown by remember { mutableStateOf(false) }
-    val reminderOptions = listOf("On the day", "1 day before", "3 days before", "1 week before")
+    // FEAT-04: seeded once from whatever this person's reminders actually were (remember(id),
+    // same reasoning as every other field above — a background re-emission of `reminders` must
+    // not clobber an in-progress edit).
+    var selectedOffsets by remember(birthday.id) {
+        mutableStateOf(loadedReminders.map { it.daysBefore }.toSet())
+    }
 
     var nameError by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf(false) }
@@ -99,8 +122,9 @@ fun EditBirthdayScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val duplicateMessageTemplate = stringResource(R.string.field_duplicate_snackbar)
 
-    val dateFormatter = remember {
-        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).apply {
+    val dateFormatter = remember(yearUnknown) {
+        val pattern = if (yearUnknown) "MMM dd" else "MMM dd, yyyy"
+        SimpleDateFormat(pattern, Locale.getDefault()).apply {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
     }
@@ -211,6 +235,15 @@ fun EditBirthdayScreen(
                         readOnly = true,
                         onClick = { showDatePicker = true }
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = yearUnknown, onCheckedChange = { yearUnknown = it })
+                        Text(
+                            stringResource(R.string.field_unknown_year),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 FormEntry(label = stringResource(R.string.field_label_relationship)) {
@@ -248,11 +281,17 @@ fun EditBirthdayScreen(
                 FormEntry(label = stringResource(R.string.field_label_phone)) {
                     NeumorphicTextField(
                         value = phoneNumber,
-                        onValueChange = { phoneNumber = it },
+                        onValueChange = { phoneNumber = it; contactLookupKey = null },
                         placeholder = stringResource(R.string.field_placeholder_phone),
                         icon = Icons.Default.Call,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = pickContact) {
+                        Icon(Icons.Default.Contacts, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.field_pick_from_contacts))
+                    }
                 }
 
                 FormEntry(label = stringResource(R.string.field_label_notes)) {
@@ -298,33 +337,17 @@ fun EditBirthdayScreen(
                 }
 
                 AnimatedVisibility(visible = notificationsEnabled) {
-                    ExposedDropdownMenuBox(
-                        expanded = showReminderDropdown,
-                        onExpandedChange = { showReminderDropdown = it }
-                    ) {
-                        FormEntry(label = stringResource(R.string.field_label_remind_me)) {
-                            NeumorphicTextField(
-                                value = reminderType,
-                                onValueChange = {},
-                                placeholder = stringResource(R.string.field_placeholder_select_time),
-                                icon = Icons.Default.Schedule,
-                                trailingIcon = if (showReminderDropdown) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                readOnly = true,
-                                onClick = { showReminderDropdown = true },
-                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            )
-                        }
-                        ExposedDropdownMenu(
-                            expanded = showReminderDropdown,
-                            onDismissRequest = { showReminderDropdown = false }
-                        ) {
-                            reminderOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = { reminderType = option; showReminderDropdown = false }
-                                )
+                    FormEntry(label = stringResource(R.string.field_label_remind_me)) {
+                        ReminderOffsetSelector(
+                            selected = selectedOffsets,
+                            onToggle = { days ->
+                                selectedOffsets = if (days in selectedOffsets) {
+                                    selectedOffsets - days
+                                } else {
+                                    selectedOffsets + days
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -337,30 +360,32 @@ fun EditBirthdayScreen(
                     dateError = dateOfBirth == null
                     if (!nameError && !dateError) {
                         val trimmedName = name.trim()
-                        val dob = dateOfBirth!!
+                        val pickedDate = dateOfBirth!!
+                        val finalDateOfBirth = if (yearUnknown) placeholderDateOfBirth(pickedDate) else pickedDate
+                        val finalBirthYear = if (yearUnknown) null else yearOf(pickedDate)
                         // See AddBirthdayScreen: notification permission is primed at app launch
                         // and surfaced by a Home banner, not requested from a button that
                         // navigates back (and tears this screen down) in the same click.
                         coroutineScope.launch {
                             // excludeId = birthday.id — otherwise saving without changing name or
                             // date would always flag itself as a duplicate of itself.
-                            if (viewModel.isDuplicateBirthday(trimmedName, dob, excludeId = birthday.id)) {
+                            if (viewModel.isDuplicateBirthday(trimmedName, finalDateOfBirth, excludeId = birthday.id)) {
                                 snackbarHostState.showSnackbar(String.format(duplicateMessageTemplate, trimmedName))
                                 return@launch
                             }
                             viewModel.updateBirthday(
                                 birthday.copy(
                                     name = trimmedName,
-                                    dateOfBirth = dob,
+                                    dateOfBirth = finalDateOfBirth,
+                                    birthYear = finalBirthYear,
                                     relationship = relationship,
                                     reminderEnabled = notificationsEnabled,
-                                    // See AddBirthdayScreen: keep the chosen offset even while
-                                    // disabled, so re-enabling doesn't reset it to the default.
-                                    reminderTime = reminderType,
                                     notes = notes.trim().ifBlank { null },
                                     phoneNumber = phoneNumber.trim().ifBlank { null },
-                                    photoUri = photoUri
-                                )
+                                    photoUri = photoUri,
+                                    contactLookupKey = contactLookupKey
+                                ),
+                                reminderOffsets = selectedOffsets
                             )
                             onNavigateBack()
                         }

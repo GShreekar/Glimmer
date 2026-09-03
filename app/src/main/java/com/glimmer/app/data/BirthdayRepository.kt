@@ -2,7 +2,10 @@ package com.glimmer.app.data
 
 import kotlinx.coroutines.flow.Flow
 
-class BirthdayRepository(private val birthdayDao: BirthdayDao) {
+class BirthdayRepository(
+    private val birthdayDao: BirthdayDao,
+    private val reminderDao: ReminderDao
+) {
     val allBirthdays: Flow<List<Birthday>> = birthdayDao.getAllBirthdays()
 
     suspend fun insert(birthday: Birthday): Long = birthdayDao.insertBirthday(normalizeForStorage(birthday))
@@ -19,6 +22,18 @@ class BirthdayRepository(private val birthdayDao: BirthdayDao) {
     /** See PERF-03 / BirthdayDao.searchBirthdaysSorted. */
     fun searchBirthdaysSorted(query: String, todayMonthDay: Int): Flow<List<Birthday>> =
         birthdayDao.searchBirthdaysSorted(query, todayMonthDay)
+
+    // FEAT-04 — reminders live in their own table now (one row per selected offset).
+    fun getRemindersForBirthday(birthdayId: Int): Flow<List<Reminder>> =
+        reminderDao.getRemindersForBirthday(birthdayId)
+
+    suspend fun getRemindersForBirthdayOnce(birthdayId: Int): List<Reminder> =
+        reminderDao.getRemindersForBirthdayOnce(birthdayId)
+
+    suspend fun getAllReminders(): List<Reminder> = reminderDao.getAllReminders()
+
+    suspend fun setReminders(birthdayId: Int, daysBeforeList: List<Int>) =
+        reminderDao.replaceReminders(birthdayId, daysBeforeList)
 
     // This is the ONLY path birthdays are written through (insert/update above), so it's the one
     // place that needs to keep monthDayKey in sync with dateOfBirth — callers building a

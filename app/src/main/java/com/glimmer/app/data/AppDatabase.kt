@@ -13,9 +13,10 @@ import net.sqlcipher.database.SupportFactory
 // JSON schema to app/schemas/ on every build — commit those files. Without them, MigrationTestHelper
 // has nothing to migrate FROM, so a migration like MIGRATION_2_3 below can't be tested against the
 // real starting schema, only asserted about by reading the code.
-@Database(entities = [Birthday::class], version = 4, exportSchema = true)
+@Database(entities = [Birthday::class, Reminder::class], version = 7, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun birthdayDao(): BirthdayDao
+    abstract fun reminderDao(): ReminderDao
 
     companion object {
         private const val DB_NAME = "glimmer_database"
@@ -52,6 +53,58 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // FEAT-01: lets a person be linked back to the Contacts row they were picked from.
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE birthdays ADD COLUMN contactLookupKey TEXT")
+            }
+        }
+
+        // FEAT-04: one row per (person, offset) reminder, replacing the single reminderTime
+        // string. Existing rows are carried forward as a single reminder matching whatever
+        // offset their reminderTime already mapped to — nobody's existing reminder silently
+        // disappears; reminderTime itself is left in place on `birthdays` (see the @Deprecated
+        // note on Birthday.reminderTime) rather than risk a table-recreate migration to drop it.
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS reminders (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        birthdayId INTEGER NOT NULL,
+                        daysBefore INTEGER NOT NULL,
+                        FOREIGN KEY(birthdayId) REFERENCES birthdays(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_reminders_birthdayId ON reminders(birthdayId)")
+                db.execSQL(
+                    """
+                    INSERT INTO reminders (birthdayId, daysBefore)
+                    SELECT id, CASE reminderTime
+                        WHEN 'On the day' THEN 0
+                        WHEN '3 days before' THEN 3
+                        WHEN '1 week before' THEN 7
+                        ELSE 1
+                    END
+                    FROM birthdays WHERE reminderEnabled = 1
+                    """.trimIndent()
+                )
+            }
+        }
+
+        // FEAT-05: null means "year not known" — existing rows all have a real one, backfilled
+        // from dateOfBirth (which, pre-FEAT-05, always carried the true year).
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE birthdays ADD COLUMN birthYear INTEGER")
+                db.execSQL(
+                    "UPDATE birthdays SET birthYear = " +
+                        "CAST(strftime('%Y', dateOfBirth / 1000, 'unixepoch') AS INTEGER)"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: buildDatabase(context.applicationContext).also { INSTANCE = it }
@@ -70,7 +123,10 @@ abstract class AppDatabase : RoomDatabase() {
             val encrypted = DatabaseEncryptionMigrator.migrateIfNeeded(context, DB_NAME, passphrase)
 
             val builder = Room.databaseBuilder(context, AppDatabase::class.java, DB_NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+                    MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
+                )
             if (encrypted) {
                 builder.openHelperFactory(SupportFactory(passphrase))
             }

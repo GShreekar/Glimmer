@@ -46,8 +46,10 @@ class BootReceiver : BroadcastReceiver() {
                 val birthdays = db.birthdayDao().getAllBirthdays().first()
                 birthdays.forEach { birthday ->
                     if (birthday.reminderEnabled) {
-                        val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-                        NotificationScheduler.scheduleReminder(context, birthday, offset, hour, minute)
+                        // FEAT-04: a person can have several reminders now (e.g. a week before
+                        // AND the day of) — re-arm every one of them, not just a single offset.
+                        val reminders = db.reminderDao().getRemindersForBirthdayOnce(birthday.id)
+                        NotificationScheduler.rescheduleAll(context, birthday, reminders, hour, minute)
                     }
                 }
             } catch (t: Throwable) {

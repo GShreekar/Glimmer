@@ -28,6 +28,7 @@
     <string name="home_reminder_warning_fix">Fix</string>
     <string name="home_cd_dismiss">Dismiss</string>
     <string name="home_turning_today">Turning %1$d today! 🎂</string>
+    <string name="home_celebrating_today">Celebrating today! 🎂</string>
     <string name="home_send_wish">View &amp; Send a Wish</string>
     <string name="home_undo_delete_message">%1$s was deleted</string>
     <string name="days_until_today">Today!</string>
@@ -55,7 +56,12 @@
     <string name="field_send_notification">Send Notification</string>
     <string name="field_send_notification_subtitle">Get reminded in advance</string>
     <string name="field_label_remind_me">Remind me</string>
-    <string name="field_placeholder_select_time">Select time</string>
+    <string name="field_pick_from_contacts">Pick from Contacts</string>
+    <string name="field_unknown_year">I don\'t know the birth year</string>
+    <string name="reminder_offset_on_day">On the day</string>
+    <string name="reminder_offset_1_day">1 day before</string>
+    <string name="reminder_offset_3_days">3 days before</string>
+    <string name="reminder_offset_1_week">1 week before</string>
 
     <!-- Add screen -->
     <string name="add_title">Add Birthday</string>
@@ -94,10 +100,12 @@
     <string name="detail_label_dob">Date of Birth</string>
     <string name="detail_label_relationship">Relationship</string>
     <string name="detail_label_phone">Phone</string>
-    <string name="detail_label_reminder">Reminder</string>
+    <string name="detail_label_reminder">Reminders</string>
     <string name="detail_reminder_off">Off</string>
+    <string name="detail_reminders_none">No reminders set</string>
     <string name="detail_label_notes">Notes</string>
     <string name="detail_turning_on">Turning %1$d on %2$s</string>
+    <string name="detail_born_on">Born on %1$s</string>
     <string name="detail_days_today">Today! 🎉</string>
     <plurals name="detail_days_away">
         <item quantity="one">%d Day Away</item>
@@ -157,6 +165,33 @@
     <string name="notif_settings_reminder_time_subtitle">What time reminders are sent</string>
     <string name="notif_settings_lock_screen_title">Show on Lock Screen</string>
     <string name="notif_settings_lock_screen_subtitle">Show the person\'s name before you unlock your phone</string>
+    <string name="notif_action_snooze">Remind Me Later</string>
+
+    <!-- Import from Contacts screen -->
+    <string name="import_title">Import from Contacts</string>
+    <string name="import_cd_back">Back</string>
+    <string name="import_permission_heading">Find birthdays already in your contacts</string>
+    <string name="import_permission_rationale">Glimmer reads your contacts only when you tap Import, and nothing is ever uploaded anywhere.</string>
+    <string name="import_permission_button">Allow Contacts Access</string>
+    <string name="import_permission_denied">Contacts access was denied. You can allow it from your phone\'s Settings app.</string>
+    <string name="import_loading">Looking for birthdays…</string>
+    <string name="import_empty">No contacts with a saved birthday were found</string>
+    <string name="import_select_all">Select All</string>
+    <string name="import_deselect_all">Deselect All</string>
+    <string name="import_already_added">Already added</string>
+    <plurals name="import_selected_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="import_button">
+        <item quantity="one">Import %d Birthday</item>
+        <item quantity="other">Import %d Birthdays</item>
+    </plurals>
+    <plurals name="import_success_snackbar">
+        <item quantity="one">Imported %d birthday</item>
+        <item quantity="other">Imported %d birthdays</item>
+    </plurals>
+    <string name="home_import_contacts">Import from Contacts</string>
 
     <!-- Profile settings screen -->
     <string name="profile_title">User Profile</string>

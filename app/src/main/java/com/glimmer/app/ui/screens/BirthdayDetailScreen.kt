@@ -108,7 +108,7 @@ fun BirthdayDetailScreen(
     val monthDay = birthday.birthMonthDay()
     val fullDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
     val daysLeft = daysUntilBirthday(birthday)
-    val age = ageOnNextBirthday(birthday)
+    val age = ageOnNextBirthday(birthday) // FEAT-05: null when the birth year isn't known
 
     val daysLabel = when (daysLeft) {
         0 -> stringResource(R.string.detail_days_today)
@@ -116,6 +116,24 @@ fun BirthdayDetailScreen(
         else -> pluralStringResource(R.plurals.detail_days_away, daysLeft, daysLeft)
     }
     val birthdateStr = "${monthDay.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${monthDay.dayOfMonth}"
+
+    // FEAT-04: a person can have several reminders now; summarized here as "3 days before, 1 day
+    // before" rather than the single string the old Birthday.reminderTime column held.
+    val remindersState by remember(birthday.id) { viewModel.getRemindersForBirthday(birthday.id) }.collectAsState()
+    val offsetLabels = mapOf(
+        0 to stringResource(R.string.reminder_offset_on_day),
+        1 to stringResource(R.string.reminder_offset_1_day),
+        3 to stringResource(R.string.reminder_offset_3_days),
+        7 to stringResource(R.string.reminder_offset_1_week)
+    )
+    val remindersSummary = when {
+        !birthday.reminderEnabled -> stringResource(R.string.detail_reminder_off)
+        remindersState == null -> null // still loading; the row below is skipped for this frame
+        remindersState.isNullOrEmpty() -> stringResource(R.string.detail_reminders_none)
+        else -> remindersState.orEmpty().sortedBy { it.daysBefore }
+            .mapNotNull { offsetLabels[it.daysBefore] }
+            .joinToString(", ")
+    }
 
     Scaffold(
         topBar = {
@@ -182,7 +200,7 @@ fun BirthdayDetailScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Text(birthday.name, style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onSurface)
             Text(
-                stringResource(R.string.detail_turning_on, age, birthdateStr),
+                if (age != null) stringResource(R.string.detail_turning_on, age, birthdateStr) else stringResource(R.string.detail_born_on, birthdateStr),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -306,7 +324,7 @@ fun BirthdayDetailScreen(
                 if (!birthday.phoneNumber.isNullOrBlank()) {
                     DetailRow(label = stringResource(R.string.detail_label_phone), value = birthday.phoneNumber)
                 }
-                DetailRow(label = stringResource(R.string.detail_label_reminder), value = if (birthday.reminderEnabled) birthday.reminderTime else stringResource(R.string.detail_reminder_off))
+                remindersSummary?.let { DetailRow(label = stringResource(R.string.detail_label_reminder), value = it) }
                 if (!birthday.notes.isNullOrBlank()) {
                     DetailRow(label = stringResource(R.string.detail_label_notes), value = birthday.notes)
                 }
