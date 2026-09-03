@@ -9,7 +9,7 @@ A beautiful, modern Android application built with Jetpack Compose featuring a s
 - **Smart Calendar**: Instantly filter and view upcoming birthdays by month and exact date.
 - **Countdowns**: See exactly how many days are left until the next celebration right on your home screen.
 - **Quick Actions**: Directly text, call, or search for gift ideas on Google directly from a birthday profile.
-- **100% Offline & Private**: All data is securely stored on your device using Android's local Room Database.
+- **100% Offline & Private**: All data is encrypted at rest (SQLCipher) in your device's local Room Database, backups are disabled, and nothing is ever uploaded anywhere.
 
 ## Tech Stack
 
@@ -33,4 +33,4 @@ A beautiful, modern Android application built with Jetpack Compose featuring a s
 
 ## Automated Builds (CI/CD)
 
-This project is configured with GitHub Actions. Whenever a commit is pushed to the `main` branch or a version tag (e.g., `v1.0.0`) is created, a new Debug APK is automatically built and attached to the repository's GitHub Actions / Releases tab.
+This project is configured with GitHub Actions. Pushing a version tag (e.g., `v1.0.0`) builds both a Debug APK and an R8-shrunk Release APK; the Debug build is always attached to the workflow's Actions artifacts, while the Release build is only published to the repository's Releases tab once the `RELEASE_KEYSTORE_BASE64` / `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD` repo secrets are configured with a real signing key — an unsigned or debug-signed build is never published as a Release.

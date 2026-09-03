@@ -9,8 +9,28 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BirthdayDao {
-    @Query("SELECT * FROM birthdays ORDER BY dateOfBirth ASC")
+    // Ordered by monthDayKey now (was `dateOfBirth ASC`, which sorted by BIRTH YEAR — useless
+    // for "who's next"). Callers that don't care about order (CalendarScreen builds its own
+    // day->list map) are unaffected; callers that do (Home, via searchBirthdaysSorted below) get
+    // a real "next occurrence" ordering without re-sorting in Kotlin.
+    @Query("SELECT * FROM birthdays ORDER BY monthDayKey ASC")
     fun getAllBirthdays(): Flow<List<Birthday>>
+
+    // PERF-03: search AND "next occurrence" ordering pushed into SQLite, replacing the old
+    // pattern of fetching every row and filtering/re-sorting it in Kotlin on every keystroke.
+    // The CASE bumps everyone whose birthday already passed this year to the back of the list,
+    // ordered by month/day within each half — the same "wrap around the calendar" ordering
+    // daysUntilBirthday() computes, just done once in SQL instead of per-item in Kotlin.
+    @Query(
+        """
+        SELECT * FROM birthdays
+        WHERE :query = ''
+           OR name LIKE '%' || :query || '%' COLLATE NOCASE
+           OR relationship LIKE '%' || :query || '%' COLLATE NOCASE
+        ORDER BY CASE WHEN monthDayKey >= :todayMonthDay THEN 0 ELSE 1 END, monthDayKey ASC
+        """
+    )
+    fun searchBirthdaysSorted(query: String, todayMonthDay: Int): Flow<List<Birthday>>
 
     // Returns the generated row id — callers need it to schedule an alarm keyed to the real id
     // rather than the default `id = 0` every unsaved Birthday carries.

@@ -1,15 +1,22 @@
 package com.glimmer.app.viewmodel
 
 import android.app.Application
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.glimmer.app.R
 import com.glimmer.app.data.Birthday
 import com.glimmer.app.data.BirthdayRepository
+import com.glimmer.app.data.GLog
 import com.glimmer.app.data.NotificationScheduler
 import com.glimmer.app.data.SettingsRepository
 import com.glimmer.app.data.birthLocalDate
 import com.glimmer.app.data.birthMonthDay
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -18,17 +25,37 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.LocalDate
 import java.time.MonthDay
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
+@OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest, used by filteredBirthdays below
 class GlimmerViewModel(
     application: Application,
     private val repository: BirthdayRepository,
     private val settingsRepository: SettingsRepository
 ) : AndroidViewModel(application) {
+
+    // Section 4.2 (Error handling & logging): previously NOTHING in this ViewModel handled a
+    // thrown exception — a failed insert/update/delete (DB error, disk full, an encryption-key
+    // issue) would propagate out of the coroutine, get silently dropped, and "look identical to
+    // a successful one" from the user's perspective. Every `viewModelScope.launch` below now
+    // carries this handler as a safety net: it's logged (GLog.e), and a generic, localized
+    // failure event goes out on [events] for a screen to show as a snackbar.
+    private val viewModelExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        GLog.e("ViewModel", "Unhandled exception in a ViewModel coroutine", throwable)
+        _events.tryEmit(UiEvent.Error(R.string.error_generic))
+    }
+
+    private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<UiEvent> = _events.asSharedFlow()
 
     val allBirthdays: StateFlow<List<Birthday>> = repository.allBirthdays
         .stateIn(
@@ -40,17 +67,48 @@ class GlimmerViewModel(
     // Search query state
     val searchQuery = MutableStateFlow("")
 
-    // Filtered + sorted birthdays based on search query
-    val filteredBirthdays: StateFlow<List<Birthday>> = combine(allBirthdays, searchQuery) { birthdays, query ->
-        val filtered = if (query.isBlank()) birthdays else birthdays.filter {
-            it.name.contains(query, ignoreCase = true) || it.relationship.contains(query, ignoreCase = true)
+    // Ticks once immediately and then again at every local-midnight rollover, so a countdown
+    // ("3 days" -> "2 days") and the today/upcoming split update on their own if the app is left
+    // open overnight — previously they only ever refreshed when the process restarted (PERF-02).
+    private val dayTicker: Flow<LocalDate> = flow {
+        while (true) {
+            val today = LocalDate.now()
+            emit(today)
+            val zone = ZoneId.systemDefault()
+            val nextMidnight = today.plusDays(1).atStartOfDay(zone)
+            val millisUntilMidnight = Duration.between(ZonedDateTime.now(zone), nextMidnight).toMillis()
+            delay(millisUntilMidnight.coerceAtLeast(1_000L))
         }
-        // Sort by next occurrence (days until next birthday, irrespective of birth year)
-        filtered.sortedBy { daysUntilBirthday(it) }
+    }
+
+    // PERF-03: search AND "next occurrence" ordering are now done by SQLite (see
+    // BirthdayDao.searchBirthdaysSorted), not by fetching every row and filtering/re-sorting it
+    // in Kotlin on every keystroke. flatMapLatest re-issues the query (and cancels the previous
+    // one) whenever the search text OR the day boundary changes.
+    val filteredBirthdays: StateFlow<List<Birthday>> = combine(searchQuery, dayTicker) { query, today ->
+        query to (today.monthValue * 100 + today.dayOfMonth)
+    }.flatMapLatest { (query, todayMonthDay) ->
+        repository.searchBirthdaysSorted(query, todayMonthDay)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // PERF-02: HomeScreen used to compute `daysUntilBirthday`/partitioning directly in the
+    // composable body — recomputed on every recomposition (a keystroke in the search box, the
+    // reminder-warning banner being dismissed, …), not just when the underlying data changed.
+    // This is now a single derived StateFlow the screen just renders.
+    val homeUiState: StateFlow<HomeUiState> = combine(filteredBirthdays, dayTicker) { birthdays, today ->
+        val items = birthdays.map { BirthdayUi(it, daysUntilBirthday(it, today), ageOnNextBirthday(it, today)) }
+        HomeUiState(
+            today = items.filter { it.daysUntil == 0 },
+            upcoming = items.filter { it.daysUntil > 0 }
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = HomeUiState()
     )
 
     // ── Global notification settings (backed by SettingsRepository/DataStore) ─────────────
@@ -73,8 +131,13 @@ class GlimmerViewModel(
     val reminderMinute: StateFlow<Int> = settingsRepository.reminderMinute
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsRepository.DEFAULT_REMINDER_MINUTE)
 
+    // SEC-03: off by default — a birthday notification names a specific person, which shouldn't
+    // be readable on a locked screen unless the user opts in.
+    val showOnLockScreen: StateFlow<Boolean> = settingsRepository.showOnLockScreen
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun setNotificationsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler) {
             settingsRepository.setNotificationsEnabled(enabled)
             // Flipping the global switch has to actually (dis)arm every alarm immediately —
             // otherwise turning it off would look like it worked while every reminder kept firing.
@@ -97,11 +160,15 @@ class GlimmerViewModel(
     }
 
     fun setSoundEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setSoundEnabled(enabled) }
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setSoundEnabled(enabled) }
     }
 
     fun setDefaultReminderTime(value: String) {
-        viewModelScope.launch { settingsRepository.setDefaultReminderTime(value) }
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setDefaultReminderTime(value) }
+    }
+
+    fun setShowOnLockScreen(show: Boolean) {
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setShowOnLockScreen(show) }
     }
 
     /**
@@ -110,7 +177,7 @@ class GlimmerViewModel(
      * alarm happens to re-arm itself (see BirthdayAlarmReceiver), which could be up to a year out.
      */
     fun setReminderTimeOfDay(hour: Int, minute: Int) {
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler) {
             settingsRepository.setReminderTimeOfDay(hour, minute)
             if (!settingsRepository.notificationsEnabled.first()) return@launch
             repository.allBirthdays.first().forEach { birthday ->
@@ -135,11 +202,11 @@ class GlimmerViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     fun setProfileName(value: String) {
-        viewModelScope.launch { settingsRepository.setProfileName(value) }
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setProfileName(value) }
     }
 
     fun setProfileEmail(value: String) {
-        viewModelScope.launch { settingsRepository.setProfileEmail(value) }
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setProfileEmail(value) }
     }
 
     /**
@@ -151,7 +218,7 @@ class GlimmerViewModel(
         repository.existsByNameAndDate(name, dateOfBirth, excludeId)
 
     fun insertBirthday(birthday: Birthday) {
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler) {
             // Room assigns the real primary key here; the incoming `birthday` still carries the
             // default id = 0. Scheduling with that would collide with every other new birthday's
             // alarm (they'd all share PendingIntent request code 0).
@@ -161,7 +228,7 @@ class GlimmerViewModel(
     }
 
     fun updateBirthday(birthday: Birthday) {
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler) {
             repository.update(birthday)
             scheduleNotification(birthday)
         }
@@ -178,7 +245,7 @@ class GlimmerViewModel(
     val deleteEvents: SharedFlow<String> = _deleteEvents.asSharedFlow()
 
     fun deleteBirthday(id: Int) {
-        viewModelScope.launch {
+        viewModelScope.launch(viewModelExceptionHandler) {
             val birthday = allBirthdays.value.firstOrNull { it.id == id }
             lastDeleted = birthday
             NotificationScheduler.cancelReminder(getApplication(), id)
@@ -230,6 +297,23 @@ class GlimmerViewModel(
         )
     }
 }
+
+/** A one-shot event a screen renders and then forgets — currently just the generic failure case. */
+sealed interface UiEvent {
+    data class Error(@StringRes val messageRes: Int) : UiEvent
+}
+
+/** A [Birthday] plus the per-day-dependent values HomeScreen renders, computed once in the ViewModel. */
+data class BirthdayUi(
+    val birthday: Birthday,
+    val daysUntil: Int,
+    val ageTurning: Int
+)
+
+data class HomeUiState(
+    val today: List<BirthdayUi> = emptyList(),
+    val upcoming: List<BirthdayUi> = emptyList()
+)
 
 /**
  * Returns how many days until the next occurrence of this birthday (0 = today).

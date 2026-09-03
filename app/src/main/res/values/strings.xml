@@ -5,6 +5,7 @@
     <string name="common_ok">OK</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_undo">Undo</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
 
     <!-- Bottom navigation -->
     <string name="nav_home">Home</string>
@@ -154,6 +155,8 @@
     <string name="notif_settings_default_reminder_subtitle">Used to pre-fill new birthdays</string>
     <string name="notif_settings_reminder_time_title">Reminder Time</string>
     <string name="notif_settings_reminder_time_subtitle">What time reminders are sent</string>
+    <string name="notif_settings_lock_screen_title">Show on Lock Screen</string>
+    <string name="notif_settings_lock_screen_subtitle">Show the person\'s name before you unlock your phone</string>
 
     <!-- Profile settings screen -->
     <string name="profile_title">User Profile</string>

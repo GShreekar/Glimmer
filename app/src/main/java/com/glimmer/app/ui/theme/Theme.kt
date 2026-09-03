@@ -3,7 +3,8 @@ package com.glimmer.app.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 data class NeumorphicShadows(
@@ -11,9 +12,16 @@ data class NeumorphicShadows(
     val darkShadow: Color
 )
 
-val LocalNeumorphicShadows = compositionLocalOf {
-    NeumorphicShadows(Color(0x26FFFFFF), Color(0x99000000))
-}
+// The app is dark-only (dynamicColor is always false below) and these two colors never change at
+// runtime, so this is a fixed constant, not per-composition state — allocating a fresh
+// NeumorphicShadows on every MyApplicationTheme recomposition (as the old `val shadows = ...`
+// inside the composable did) was pure churn. Hoisting it here also lets LocalNeumorphicShadows use
+// staticCompositionLocalOf: compositionLocalOf sets up per-read invalidation tracking for a value
+// that Compose otherwise has no reason to think can change, which is wasted overhead on every one
+// of the many `.neumorphic(...)` call sites across the app that read it (PERF-01).
+private val AppNeumorphicShadows = NeumorphicShadows(Color(0x26FFFFFF), Color(0x99000000))
+
+val LocalNeumorphicShadows = staticCompositionLocalOf { AppNeumorphicShadows }
 
 private val DarkColorScheme = darkColorScheme(
     primary = primaryDark,
@@ -59,10 +67,8 @@ fun MyApplicationTheme(
     // approach is to pass the intended SystemBarStyle to enableEdgeToEdge() itself, in
     // MainActivity.onCreate, before setContent — see MainActivity.kt.
 
-    val shadows = NeumorphicShadows(Color(0x26FFFFFF), Color(0x99000000))
-
-    androidx.compose.runtime.CompositionLocalProvider(
-        LocalNeumorphicShadows provides shadows
+    CompositionLocalProvider(
+        LocalNeumorphicShadows provides AppNeumorphicShadows
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

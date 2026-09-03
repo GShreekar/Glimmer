@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.glimmer.app.data.AppDatabase
 import com.glimmer.app.data.BirthdayRepository
 import com.glimmer.app.data.NotificationScheduler
@@ -22,6 +23,9 @@ import com.glimmer.app.ui.theme.MyApplicationTheme
 import com.glimmer.app.ui.theme.surfaceDark
 import com.glimmer.app.viewmodel.GlimmerViewModel
 import com.glimmer.app.viewmodel.GlimmerViewModelFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -38,8 +42,18 @@ class MainActivity : ComponentActivity() {
         // Must be called before super.onCreate() — it reads the activity's theme
         // (Theme.Glimmer.Starting) to know how to draw the splash window, then switches to
         // postSplashScreenTheme (Theme.MyApplication) once the first frame is ready.
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // SEC-02: AppDatabase.getDatabase() now does real I/O before Room even opens anything —
+        // loading SQLCipher's native library, generating/reading the Keystore-backed passphrase,
+        // and (existing installs only, once) migrating a plaintext DB to an encrypted one, which
+        // for a large database is not instant. Calling that straight from onCreate would block
+        // the main thread — worst case an ANR. Keeping the already-installed splash screen up
+        // via setKeepOnScreenCondition until it's done is the idiomatic way to bridge that gap
+        // without a visible flash to an empty screen while data loads.
+        var isDataReady = false
+        splashScreen.setKeepOnScreenCondition { !isDataReady }
 
         // window.statusBarColor (previously set from a SideEffect in MyApplicationTheme) is
         // deprecated and silently ignored once targetSdk reaches 35, where edge-to-edge is
@@ -63,15 +77,18 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        val database = AppDatabase.getDatabase(this)
-        val repository = BirthdayRepository(database.birthdayDao())
-        val settingsRepository = SettingsRepository.getInstance(this)
-        val factory = GlimmerViewModelFactory(application, repository, settingsRepository)
-        val viewModel = ViewModelProvider(this, factory)[GlimmerViewModel::class.java]
+        lifecycleScope.launch {
+            val database = withContext(Dispatchers.IO) { AppDatabase.getDatabase(this@MainActivity) }
+            val repository = BirthdayRepository(database.birthdayDao())
+            val settingsRepository = SettingsRepository.getInstance(this@MainActivity)
+            val factory = GlimmerViewModelFactory(application, repository, settingsRepository)
+            val viewModel = ViewModelProvider(this@MainActivity, factory)[GlimmerViewModel::class.java]
 
-        setContent {
-            MyApplicationTheme {
-                GlimmerApp(viewModel)
+            isDataReady = true
+            setContent {
+                MyApplicationTheme {
+                    GlimmerApp(viewModel)
+                }
             }
         }
     }

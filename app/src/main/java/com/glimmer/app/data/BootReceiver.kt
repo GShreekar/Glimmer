@@ -3,7 +3,6 @@ package com.glimmer.app.data
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -37,18 +36,24 @@ class BootReceiver : BroadcastReceiver() {
                 // any of them just because the device rebooted.
                 if (!settings.notificationsEnabled.first()) return@launch
 
+                // Was missing hour/minute here — every post-reboot re-arm silently reverted to
+                // the 09:00 default regardless of what the user configured in Notifications
+                // settings (BUG-27's fix hadn't reached this second scheduling call site).
+                val hour = settings.reminderHour.first()
+                val minute = settings.reminderMinute.first()
+
                 val db = AppDatabase.getDatabase(context)
                 val birthdays = db.birthdayDao().getAllBirthdays().first()
                 birthdays.forEach { birthday ->
                     if (birthday.reminderEnabled) {
                         val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-                        NotificationScheduler.scheduleReminder(context, birthday, offset)
+                        NotificationScheduler.scheduleReminder(context, birthday, offset, hour, minute)
                     }
                 }
             } catch (t: Throwable) {
                 // Reminders silently going stale is worse than a logged failure — at least this
                 // is visible in logcat / a bug report rather than vanishing without a trace.
-                Log.e("Glimmer/BootReceiver", "Failed to reschedule reminders for ${intent.action}", t)
+                GLog.e("BootReceiver", "Failed to reschedule reminders for ${intent.action}", t)
             } finally {
                 pendingResult.finish()
             }

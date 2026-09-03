@@ -8,6 +8,23 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
 }
 
+// SEC-04: the release build used to ship unminified (isMinifyEnabled = false, so R8 had never
+// run on this code at all) and CI only ever built+published assembleDebug — signed with the
+// universally-known Android debug keystore, so anyone could produce a fake "update" that installs
+// over it. A real release signing config is sourced from environment variables rather than a
+// checked-in keystore/passwords; CI populates them from repo secrets (see build_apk.yml), and
+// locally they're simply absent, so `./gradlew assembleRelease` still works for anyone without
+// those secrets — it just produces an R8-shrunk but UNSIGNED apk, which still surfaces any
+// shrinking-related breakage locally without letting a real signing key touch a dev machine.
+val releaseKeystorePath: String? = System.getenv("RELEASE_KEYSTORE_PATH")
+val releaseKeystorePassword: String? = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias: String? = System.getenv("RELEASE_KEY_ALIAS")
+val releaseKeyPassword: String? = System.getenv("RELEASE_KEY_PASSWORD")
+val hasReleaseSigningConfig = !releaseKeystorePath.isNullOrBlank() &&
+  !releaseKeystorePassword.isNullOrBlank() &&
+  !releaseKeyAlias.isNullOrBlank() &&
+  !releaseKeyPassword.isNullOrBlank()
+
 android {
   // BUG-34: was namespace "com.example" (the Android Studio template default, never renamed) with
   // applicationId "com.aistudio.glimmer.celebration" (leftover from AI Studio scaffolding) —
@@ -23,10 +40,25 @@ android {
     versionName = "1.0"
   }
 
+  signingConfigs {
+    if (hasReleaseSigningConfig) {
+      create("release") {
+        storeFile = file(releaseKeystorePath!!)
+        storePassword = releaseKeystorePassword
+        keyAlias = releaseKeyAlias
+        keyPassword = releaseKeyPassword
+      }
+    }
+  }
+
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      if (hasReleaseSigningConfig) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
     // debug uses the default Android debug signing automatically — no custom config needed
   }
@@ -71,6 +103,9 @@ dependencies {
   implementation(libs.androidx.datastore.preferences)
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
   implementation(libs.coil.compose)
+  // SEC-02: encrypts the Room database at rest (see AppDatabase/DatabaseKeyProvider).
+  implementation(libs.sqlcipher.android)
+  implementation(libs.androidx.security.crypto)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
 

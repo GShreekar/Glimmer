@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.WarningAmber
@@ -57,6 +58,7 @@ fun NotificationsSettingsScreen(
     val defaultReminderTime by viewModel.defaultReminderTime.collectAsState()
     val reminderHour by viewModel.reminderHour.collectAsState()
     val reminderMinute by viewModel.reminderMinute.collectAsState()
+    val showOnLockScreen by viewModel.showOnLockScreen.collectAsState()
 
     var showReminderDropdown by remember { mutableStateOf(false) }
     val reminderOptions = listOf("On the day", "1 day before", "3 days before", "1 week before")
@@ -310,6 +312,34 @@ fun NotificationsSettingsScreen(
                             TextButton(onClick = { showTimePicker = true }) {
                                 Text(reminderTimeLabel, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                             }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                        // ── Show on Lock Screen (SEC-03) ──────────────────
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier.size(40.dp)
+                                        .neumorphic(cornerRadius = 20.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(stringResource(R.string.notif_settings_lock_screen_title), style = MaterialTheme.typography.bodyLarge)
+                                    Text(stringResource(R.string.notif_settings_lock_screen_subtitle), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            NeumorphicSwitch(
+                                checked = showOnLockScreen,
+                                onCheckedChange = { viewModel.setShowOnLockScreen(it) }
+                            )
                         }
                     }
                 }

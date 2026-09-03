@@ -34,29 +34,73 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Rename APK
+      - name: Check release signing secrets
+        id: signing
+        run: |
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ] && [ -n "${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" ] \
+             && [ -n "${{ secrets.RELEASE_KEY_ALIAS }}" ] && [ -n "${{ secrets.RELEASE_KEY_PASSWORD }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decode release keystore
+        if: steps.signing.outputs.configured == 'true'
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      # SEC-04: this used to be the only APK the workflow ever built — `assembleDebug`, signed
+      # with the universally-known Android debug keystore, published straight to GitHub Releases.
+      # Anyone could produce a "Glimmer update" that installs cleanly over a real install. This
+      # now runs unconditionally (R8/shrinking issues should surface in CI even before signing
+      # secrets are configured) but only produces an installable, verifiably-yours APK once the
+      # RELEASE_KEYSTORE_BASE64 / RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEY_PASSWORD
+      # repo secrets are set — see app/build.gradle.kts for how they're wired into the signing config.
+      - name: Build Release APK
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ steps.signing.outputs.configured == 'true' && format('{0}/release.keystore', runner.temp) || '' }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload R8 mapping file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Glimmer-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: ignore
+
+      - name: Rename APKs
         run: |
           VERSION="${GITHUB_REF_NAME:-debug}"
           mkdir -p renamed
-          cp app/build/outputs/apk/debug/app-debug.apk "renamed/Glimmer-${VERSION}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "renamed/Glimmer-${VERSION}-debug.apk"
+          if [ "${{ steps.signing.outputs.configured }}" = "true" ]; then
+            cp app/build/outputs/apk/release/app-release.apk "renamed/Glimmer-${VERSION}.apk"
+          fi
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Glimmer-APK
           path: renamed/Glimmer-*.apk
 
+      # Only publishes a GitHub Release when the release build is actually signed with a real,
+      # repo-owned key — an unsigned or debug-signed APK is deliberately never attached to a
+      # public Release asset (Android won't even install an unsigned APK, and a debug-signed one
+      # is trivially impersonable).
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.configured == 'true'
         uses: softprops/action-gh-release@v2
         with:
           name: "Glimmer ${{ github.ref_name }}"
           body: |
             ## 🎂 Glimmer ${{ github.ref_name }}
-            
+
             Birthday reminder app — dark neumorphic design.
-            
+
             **Install:** Download the APK below and open it on your Android device (allow installation from unknown sources if prompted).
-          files: renamed/Glimmer-*.apk
+          files: renamed/Glimmer-${{ github.ref_name }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

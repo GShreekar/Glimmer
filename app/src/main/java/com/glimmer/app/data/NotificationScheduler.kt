@@ -134,7 +134,12 @@ object NotificationScheduler {
                 )
             }
         } catch (e: SecurityException) {
-            // Fall back to inexact alarm
+            // Thrown if canScheduleExactAlarms() was true when checked above but the permission
+            // was revoked in the tiny window before this call (or on OEM builds that lie about
+            // it). Previously swallowed with no trace at all — logged now so a "why is this
+            // reminder late" report is diagnosable — then falls back to an inexact alarm rather
+            // than not scheduling anything.
+            GLog.w("Scheduler", "setExactAndAllowWhileIdle denied for birthdayId=${birthday.id}; falling back to an inexact alarm", e)
             alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         }
     }
@@ -214,25 +219,44 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         // and DB reads — onReceive would otherwise return (and the receiver could be killed)
         // before they complete.
         val pendingResult = goAsync()
+        // Section 4.2: this whole block used to have no exception handling at all — a DB read
+        // failing here (encryption key issue, disk full, a corrupt row) would throw out of the
+        // coroutine, get silently swallowed by the default uncaught-exception behavior, and
+        // leave the reminder un-re-armed with nothing in Logcat to explain why. It's now caught,
+        // logged, and — this is the important part — the notification for THIS occurrence still
+        // gets a best-effort attempt even if the re-arm half fails, since missing next year's
+        // reminder is a much smaller problem than missing this one too.
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val settings = SettingsRepository.getInstance(context)
-                val soundEnabled = settings.soundEnabled.first()
-                postNotification(context, birthdayId, name, daysBefore, soundEnabled)
+                try {
+                    val soundEnabled = settings.soundEnabled.first()
+                    val showOnLockScreen = settings.showOnLockScreen.first()
+                    postNotification(context, birthdayId, name, daysBefore, soundEnabled, showOnLockScreen)
+                } catch (t: Throwable) {
+                    GLog.e("Alarm", "Failed to post the notification for birthdayId=$birthdayId", t)
+                }
 
-                // Only re-arm if the global toggle is still on — otherwise this birthday's alarm
-                // stays cancelled, matching whatever the user set in Notifications settings.
-                if (settings.notificationsEnabled.first()) {
-                    val birthday = AppDatabase.getDatabase(context).birthdayDao()
-                        .getBirthdayById(birthdayId).first()
-                    if (birthday != null && birthday.reminderEnabled) {
-                        val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
-                        NotificationScheduler.scheduleReminder(
-                            context, birthday, offset,
-                            hour24 = settings.reminderHour.first(),
-                            minute = settings.reminderMinute.first()
-                        )
+                try {
+                    // Only re-arm if the global toggle is still on — otherwise this birthday's
+                    // alarm stays cancelled, matching whatever the user set in Notifications
+                    // settings.
+                    if (settings.notificationsEnabled.first()) {
+                        val birthday = AppDatabase.getDatabase(context).birthdayDao()
+                            .getBirthdayById(birthdayId).first()
+                        if (birthday != null && birthday.reminderEnabled) {
+                            val offset = NotificationScheduler.reminderTimeToOffset(birthday.reminderTime)
+                            NotificationScheduler.scheduleReminder(
+                                context, birthday, offset,
+                                hour24 = settings.reminderHour.first(),
+                                minute = settings.reminderMinute.first()
+                            )
+                        }
                     }
+                } catch (t: Throwable) {
+                    GLog.e("Alarm", "Failed to re-arm the reminder for birthdayId=$birthdayId " +
+                        "after it fired — it will not fire again until the app is opened or " +
+                        "the device reboots", t)
                 }
             } finally {
                 pendingResult.finish()
@@ -245,7 +269,8 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         birthdayId: Int,
         name: String,
         daysBefore: Int,
-        soundEnabled: Boolean
+        soundEnabled: Boolean,
+        showOnLockScreen: Boolean
     ) {
         NotificationScheduler.createNotificationChannel(context)
         val channelId = if (soundEnabled) {
@@ -270,7 +295,12 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             else -> "$name's birthday is in $daysBefore days."
         }
 
-        val notification = NotificationCompat.Builder(context, channelId)
+        // SEC-03: naming a specific person on the lock screen is exactly the kind of detail that
+        // shouldn't be visible to anyone who picks up a locked phone. VISIBILITY_PRIVATE plus a
+        // generic setPublicVersion is the platform-correct way to say "a notification exists"
+        // without leaking its content — the redacted version is what shows on the lock screen
+        // unless the user has opted into full content in Notifications settings.
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(ContextCompat.getColor(context, R.color.glimmer_accent))
             .setContentTitle("🎂 Birthday Reminder")
@@ -278,9 +308,23 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tapPendingIntent)
             .setAutoCancel(true)
-            .build()
+
+        if (showOnLockScreen) {
+            builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        } else {
+            val publicVersion = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(ContextCompat.getColor(context, R.color.glimmer_accent))
+                .setContentTitle("🎂 Birthday Reminder")
+                .setContentText("You have a birthday reminder")
+                .setContentIntent(tapPendingIntent)
+                .setAutoCancel(true)
+                .build()
+            builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            builder.setPublicVersion(publicVersion)
+        }
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(birthdayId, notification)
+        manager.notify(birthdayId, builder.build())
     }
 }

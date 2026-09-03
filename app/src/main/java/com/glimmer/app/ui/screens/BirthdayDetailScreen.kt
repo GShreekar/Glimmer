@@ -272,8 +272,14 @@ fun BirthdayDetailScreen(
                     color = MaterialTheme.colorScheme.onPrimary,
                     bgColor = MaterialTheme.colorScheme.primary,
                     onClick = {
+                        // SEC-05: relationship is Uri.encode-wrapped before going into the query
+                        // string (good) and, since it currently only ever comes from a fixed
+                        // dropdown, this is already safe — the length cap is cheap insurance
+                        // against a future free-text relationship field (FEAT-08) turning this
+                        // into a way to build an oversized or malformed search URL.
+                        val safeRelationship = Uri.encode(birthday.relationship.lowercase().take(60))
                         val searchIntent = Intent(Intent.ACTION_VIEW,
-                            Uri.parse("https://www.google.com/search?q=birthday+gift+ideas+for+${Uri.encode(birthday.relationship.lowercase())}"))
+                            Uri.parse("https://www.google.com/search?q=birthday+gift+ideas+for+$safeRelationship"))
                         context.safeStartActivity(searchIntent) {
                             coroutineScope.launch { snackbarHostState.showSnackbar(noBrowserMessage) }
                         }

@@ -33,6 +33,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val REMINDER_MINUTE = intPreferencesKey("reminder_minute")
         val PROFILE_NAME = stringPreferencesKey("profile_name")
         val PROFILE_EMAIL = stringPreferencesKey("profile_email")
+        val SHOW_ON_LOCK_SCREEN = booleanPreferencesKey("show_on_lock_screen")
     }
 
     val notificationsEnabled: Flow<Boolean> =
@@ -60,6 +61,12 @@ class SettingsRepository private constructor(private val context: Context) {
     val profileEmail: Flow<String> =
         context.settingsDataStore.data.map { it[Keys.PROFILE_EMAIL] ?: "" }
 
+    // SEC-03: defaults to PRIVATE — a birthday notification naming a specific person is the kind
+    // of thing that shouldn't be readable by anyone glancing at a locked phone by default. Off by
+    // default, opt-in to full content, rather than the other way around.
+    val showOnLockScreen: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[Keys.SHOW_ON_LOCK_SCREEN] ?: false }
+
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
     }
@@ -85,6 +92,10 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun setProfileEmail(value: String) {
         context.settingsDataStore.edit { it[Keys.PROFILE_EMAIL] = value }
+    }
+
+    suspend fun setShowOnLockScreen(show: Boolean) {
+        context.settingsDataStore.edit { it[Keys.SHOW_ON_LOCK_SCREEN] = show }
     }
 
     companion object {

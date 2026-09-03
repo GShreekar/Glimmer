@@ -17,10 +17,19 @@
     <!-- Reschedule alarms after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+      SEC-01: the README promises "100% Offline & Private", but the default (allowBackup=true
+      with no rules) is "back everything up" — Android Auto Backup would silently upload the
+      entire Room database (every contact's name, birth date, relationship, private notes) to the
+      user's Google Drive. Disabled outright rather than carved up with dataExtractionRules:
+      SEC-02 now encrypts the database with a passphrase kept in Android Keystore-backed storage,
+      which is device-bound and does not travel in ANY backup or device-transfer flow — so even a
+      selectively-included copy of the (encrypted) DB would arrive on a new device undecryptable
+      and useless. FEAT-07 (a local, user-controlled encrypted export/import file) is the correct
+      way to move data to a new phone; that's a feature addition, not in this fix's scope.
+    -->
     <application
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

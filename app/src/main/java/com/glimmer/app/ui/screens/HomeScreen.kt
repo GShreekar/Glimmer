@@ -24,7 +24,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.glimmer.app.R
-import com.glimmer.app.data.Birthday
 import com.glimmer.app.data.birthMonthDay
 import com.glimmer.app.ui.components.BirthdayAvatar
 import com.glimmer.app.ui.components.NeumorphicButton
@@ -32,9 +31,9 @@ import com.glimmer.app.ui.components.NeumorphicIconButton
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.ui.components.rememberExactAlarmPermissionState
 import com.glimmer.app.ui.components.rememberNotificationsPermissionState
+import com.glimmer.app.viewmodel.BirthdayUi
 import com.glimmer.app.viewmodel.GlimmerViewModel
-import com.glimmer.app.viewmodel.ageOnNextBirthday
-import com.glimmer.app.viewmodel.daysUntilBirthday
+import com.glimmer.app.viewmodel.UiEvent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,12 +44,12 @@ fun HomeScreen(
     onNavigateToNotifications: () -> Unit,
     onNavigateToProfile: () -> Unit
 ) {
-    val filteredBirthdays by viewModel.filteredBirthdays.collectAsState()
+    // PERF-02: today/upcoming partitioning and per-item daysUntil/age are now computed once in
+    // the ViewModel (see GlimmerViewModel.homeUiState), not recomputed here on every
+    // recomposition — a keystroke in the search box, the reminder banner being dismissed, the
+    // delete-undo snackbar appearing, none of that used to be free.
+    val uiState by viewModel.homeUiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-
-    // Split into today's birthdays and upcoming
-    val todayBirthdays = filteredBirthdays.filter { daysUntilBirthday(it) == 0 }
-    val upcomingBirthdays = filteredBirthdays.filter { daysUntilBirthday(it) > 0 }
 
     // Reflects the REAL, current system permission state (unlike a stored preference, these can
     // change outside the app — e.g. the user revokes notifications from system Settings) so the
@@ -76,6 +75,20 @@ fun HomeScreen(
             )
             if (result == SnackbarResult.ActionPerformed) {
                 viewModel.undoDelete()
+            }
+        }
+    }
+
+    // Section 4.2: Add/Edit fire their save and navigate back in the same click without waiting
+    // for the result (see AddBirthdayScreen/EditBirthdayScreen), so a failure has nowhere to
+    // surface on the screen where it happened. GlimmerViewModel.events is the generic safety net
+    // for exactly that — previously a failed save "looked identical to a successful one".
+    // context.getString(...) (not stringResource(), which needs composable context) resolves the
+    // event's resource id from inside the plain suspend collector below.
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is UiEvent.Error -> snackbarHostState.showSnackbar(context.getString(event.messageRes))
             }
         }
     }
@@ -198,7 +211,7 @@ fun HomeScreen(
             }
 
             // ── Today's Birthdays ─────────────────────────────────────────
-            if (todayBirthdays.isNotEmpty()) {
+            if (uiState.today.isNotEmpty()) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -211,15 +224,15 @@ fun HomeScreen(
                     }
                 }
 
-                items(todayBirthdays) { birthday ->
-                    TodayBirthdayCard(birthday = birthday, onClick = { onNavigateToDetail(birthday.id) })
+                items(uiState.today, key = { it.birthday.id }) { item ->
+                    TodayBirthdayCard(item = item, onClick = { onNavigateToDetail(item.birthday.id) })
                 }
             }
 
             // ── Upcoming Birthdays ────────────────────────────────────────
             item {
                 Text(
-                    if (upcomingBirthdays.isEmpty() && todayBirthdays.isEmpty())
+                    if (uiState.upcoming.isEmpty() && uiState.today.isEmpty())
                         stringResource(R.string.home_section_none_yet)
                     else
                         stringResource(R.string.home_section_upcoming),
@@ -228,7 +241,7 @@ fun HomeScreen(
                 )
             }
 
-            if (upcomingBirthdays.isEmpty() && todayBirthdays.isEmpty()) {
+            if (uiState.upcoming.isEmpty() && uiState.today.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
@@ -245,8 +258,8 @@ fun HomeScreen(
                     }
                 }
             } else {
-                items(upcomingBirthdays) { birthday ->
-                    UpcomingBirthdayCard(birthday = birthday, onClick = { onNavigateToDetail(birthday.id) })
+                items(uiState.upcoming, key = { it.birthday.id }) { item ->
+                    UpcomingBirthdayCard(item = item, onClick = { onNavigateToDetail(item.birthday.id) })
                 }
             }
 
@@ -301,8 +314,9 @@ private fun ReminderHealthBanner(onFixClick: () -> Unit, onDismiss: () -> Unit) 
 }
 
 @Composable
-private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
-    val age = ageOnNextBirthday(birthday)
+private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
+    val birthday = item.birthday
+    val age = item.ageTurning
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -348,10 +362,11 @@ private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
 }
 
 @Composable
-private fun UpcomingBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
+private fun UpcomingBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
+    val birthday = item.birthday
     val monthDay = birthday.birthMonthDay()
     val dayStr = "${monthDay.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${monthDay.dayOfMonth}"
-    val daysLeft = daysUntilBirthday(birthday)
+    val daysLeft = item.daysUntil
     val daysLabel = when (daysLeft) {
         0 -> stringResource(R.string.days_until_today)
         1 -> stringResource(R.string.days_until_tomorrow)
