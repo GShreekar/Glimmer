@@ -1,7 +1,7 @@
 package com.glimmer.app.ui.components
 
-import androidx.compose.foundation.BoxWithConstraints
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable

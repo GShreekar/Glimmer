@@ -1,8 +1,10 @@
 package com.glimmer.app.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -59,20 +61,26 @@ class BirthdayWidget : GlanceAppWidget() {
             emptyList()
         }
 
+        // Built here (where a plain android.content.Context is available) rather than inside the
+        // Glance composable below — Glance's action builders take a concrete Intent, not a
+        // reified Activity type parameter, and there's no LocalContext-style shortcut worth
+        // reaching for when provideGlance already hands us exactly what's needed.
+        val tapIntent = Intent(context, MainActivity::class.java)
+
         provideContent {
-            BirthdayWidgetContent(upcoming)
+            BirthdayWidgetContent(upcoming, tapIntent)
         }
     }
 }
 
 @Composable
-private fun BirthdayWidgetContent(entries: List<Pair<Birthday, Int>>) {
+private fun BirthdayWidgetContent(entries: List<Pair<Birthday, Int>>, tapIntent: Intent) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(Color(0xFF1C1B22))
             .padding(12.dp)
-            .clickable(actionStartActivity<MainActivity>())
+            .clickable(actionStartActivity(tapIntent))
     ) {
         Text(
             "🎂 Glimmer",

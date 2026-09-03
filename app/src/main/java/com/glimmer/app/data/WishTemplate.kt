@@ -18,7 +18,10 @@ data class WishTemplates(
 ) {
     fun resolve(relationship: String): String = perRelationship[relationship]?.takeIf { it.isNotBlank() } ?: default
 
-    fun toJson(): String = Json.encodeToString(this)
+    // Explicit reified type argument — Json.encodeToString(this) alone lets the compiler resolve
+    // to the (serializer, value) two-arg overload instead of the reified one-arg extension,
+    // treating `this` as a SerializationStrategy and complaining there's no `value` supplied.
+    fun toJson(): String = Json.encodeToString<WishTemplates>(this)
 
     companion object {
         const val DEFAULT_TEMPLATE = "Happy Birthday {name}! 🎂🎉"
