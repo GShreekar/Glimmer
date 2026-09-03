@@ -108,7 +108,11 @@ fun NotificationsSettingsScreen(
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped
+                        // by the TopAppBar's own Surface at this size unless it's reduced.
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.notif_settings_cd_back), tint = MaterialTheme.colorScheme.onSurface)
                     }

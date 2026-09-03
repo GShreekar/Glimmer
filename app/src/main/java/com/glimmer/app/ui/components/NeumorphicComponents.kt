@@ -29,6 +29,10 @@ fun NeumorphicButton(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 16.dp,
     shapeBackgroundColor: Color = Color.Unspecified,
+    // Defaults match Modifier.neumorphic()'s own — only worth overriding in a tightly clipped
+    // container (see the elevation/blur reduction on every TopAppBar-hosted icon button).
+    elevation: Dp = 6.dp,
+    blur: Dp = 12.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -39,7 +43,9 @@ fun NeumorphicButton(
             .neumorphic(
                 isSunken = isPressed,
                 cornerRadius = cornerRadius,
-                shapeBackgroundColor = shapeBackgroundColor
+                shapeBackgroundColor = shapeBackgroundColor,
+                elevation = elevation,
+                blur = blur
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -58,6 +64,15 @@ fun NeumorphicIconButton(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 24.dp,
     shapeBackgroundColor: Color = Color.Unspecified,
+    // BUG: raised neumorphic shadows bleed a few dp beyond the shape itself (by design — that's
+    // the whole effect), and Material3's TopAppBar wraps its content in a Surface that clips
+    // anything overflowing its own bounds. A button sized close to the TopAppBar's own height
+    // (as every back/action icon here is) has nowhere for that bleed to go, so it visibly gets
+    // cut off flush with the bar's edge. Every TopAppBar-hosted call site now passes a smaller
+    // elevation/blur so the shadow comfortably fits inside the clip; call sites with room to
+    // spare (the Home FAB, Calendar's month-nav buttons) keep the fuller default look.
+    elevation: Dp = 6.dp,
+    blur: Dp = 12.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -68,7 +83,9 @@ fun NeumorphicIconButton(
             .neumorphic(
                 isSunken = isPressed,
                 cornerRadius = cornerRadius,
-                shapeBackgroundColor = shapeBackgroundColor
+                shapeBackgroundColor = shapeBackgroundColor,
+                elevation = elevation,
+                blur = blur
             )
             .clickable(
                 interactionSource = interactionSource,

@@ -28,6 +28,7 @@ import com.glimmer.app.data.birthMonthDay
 import com.glimmer.app.ui.components.BirthdayAvatar
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
+import com.glimmer.app.ui.components.NeumorphicSnackbarHost
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.ui.components.rememberExactAlarmPermissionState
 import com.glimmer.app.ui.components.rememberNotificationsPermissionState
@@ -98,7 +99,7 @@ fun HomeScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { NeumorphicSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -109,12 +110,16 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped by
+                    // the TopAppBar's own Surface at this size unless it's reduced.
                     NeumorphicIconButton(
                         onClick = onNavigateToNotifications,
                         modifier = Modifier
                             .padding(end = 8.dp)
                             .size(36.dp),
                         cornerRadius = 18.dp,
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(
                             Icons.Default.NotificationsNone,
@@ -129,6 +134,8 @@ fun HomeScreen(
                             .padding(end = 16.dp)
                             .size(36.dp),
                         cornerRadius = 18.dp,
+                        elevation = 3.dp,
+                        blur = 6.dp,
                         shapeBackgroundColor = MaterialTheme.colorScheme.primary
                     ) {
                         Icon(

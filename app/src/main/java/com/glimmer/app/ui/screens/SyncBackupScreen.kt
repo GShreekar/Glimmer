@@ -38,7 +38,11 @@ fun SyncBackupScreen(
                         modifier = Modifier
                             .padding(start = 12.dp)
                             .size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped
+                        // by the TopAppBar's own Surface at this size unless it's reduced.
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,

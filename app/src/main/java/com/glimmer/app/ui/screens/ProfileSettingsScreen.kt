@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
@@ -20,9 +21,15 @@ import androidx.compose.ui.unit.dp
 import com.glimmer.app.R
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
+import com.glimmer.app.ui.components.NeumorphicSnackbarHost
 import com.glimmer.app.ui.components.NeumorphicTextField
 import com.glimmer.app.ui.components.neumorphic
+import com.glimmer.app.ui.components.rememberBirthDatePickerState
 import com.glimmer.app.viewmodel.GlimmerViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +42,16 @@ fun ProfileSettingsScreen(
     // SettingsScreen observes) only on Save.
     var displayName by remember { mutableStateOf(viewModel.profileName.value) }
     var email by remember { mutableStateOf(viewModel.profileEmail.value) }
+    // Profile info only — a stored date, not a Birthday row: it doesn't appear on Home/Calendar
+    // and never gets a reminder of its own (you don't need Glimmer to remind you of your own
+    // birthday). Reuses the same date-picker component and UTC-midnight-millis convention as
+    // Add/Edit purely for consistency, not because this participates in any of that logic.
+    var myBirthday by remember { mutableStateOf(viewModel.profileBirthday.value) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberBirthDatePickerState(initialSelectedDateMillis = myBirthday)
+    val dateFormatter = remember {
+        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") }
+    }
     var savedSnackbar by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     // stringResource() can't be called from inside LaunchedEffect (it runs as a coroutine, not
@@ -48,6 +65,23 @@ fun ProfileSettingsScreen(
         }
     }
 
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDatePicker = false
+                    myBirthday = datePickerState.selectedDateMillis
+                }) { Text(stringResource(R.string.common_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.common_cancel)) }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -58,7 +92,11 @@ fun ProfileSettingsScreen(
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped
+                        // by the TopAppBar's own Surface at this size unless it's reduced.
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.profile_cd_back), tint = MaterialTheme.colorScheme.onSurface)
                     }
@@ -66,7 +104,7 @@ fun ProfileSettingsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { NeumorphicSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Column(
@@ -135,6 +173,22 @@ fun ProfileSettingsScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                     )
                 }
+
+                FormEntry(label = stringResource(R.string.profile_label_birthday)) {
+                    NeumorphicTextField(
+                        value = myBirthday?.let { dateFormatter.format(Date(it)) } ?: "",
+                        onValueChange = {},
+                        placeholder = stringResource(R.string.profile_placeholder_birthday),
+                        icon = Icons.Default.Cake,
+                        readOnly = true,
+                        onClick = { showDatePicker = true }
+                    )
+                    if (myBirthday != null) {
+                        TextButton(onClick = { myBirthday = null }) {
+                            Text(stringResource(R.string.profile_clear_birthday), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -143,6 +197,7 @@ fun ProfileSettingsScreen(
                 onClick = {
                     viewModel.setProfileName(displayName.trim())
                     viewModel.setProfileEmail(email.trim())
+                    viewModel.setProfileBirthday(myBirthday)
                     savedSnackbar = true
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),

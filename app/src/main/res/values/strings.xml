@@ -91,10 +91,13 @@
     <string name="detail_delete_cancel">Cancel</string>
     <string name="detail_action_message">Message</string>
     <string name="detail_action_call">Call</string>
+    <string name="detail_action_whatsapp">WhatsApp</string>
     <string name="detail_action_gift">Gift</string>
     <string name="detail_snackbar_no_sms_app">No messaging app found</string>
     <string name="detail_snackbar_no_dialer_app">No dialer app found</string>
     <string name="detail_snackbar_no_browser">No browser found</string>
+    <string name="detail_snackbar_no_whatsapp">Couldn\'t open WhatsApp</string>
+    <string name="detail_snackbar_no_phone_whatsapp">Add a phone number to message on WhatsApp</string>
     <string name="detail_details_heading">Details</string>
     <string name="detail_label_full_name">Full Name</string>
     <string name="detail_label_dob">Date of Birth</string>
@@ -201,6 +204,9 @@
     <string name="profile_placeholder_name">Your name</string>
     <string name="profile_label_email">Email</string>
     <string name="profile_placeholder_email">your@email.com</string>
+    <string name="profile_label_birthday">Your Birthday (optional)</string>
+    <string name="profile_placeholder_birthday">Select your date of birth</string>
+    <string name="profile_clear_birthday">Clear</string>
     <string name="profile_save_button">Save Profile</string>
     <string name="profile_saved_snackbar">Profile saved!</string>
 

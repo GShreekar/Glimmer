@@ -10,6 +10,7 @@ import com.glimmer.app.data.Birthday
 import com.glimmer.app.data.BirthdayRepository
 import com.glimmer.app.data.GLog
 import com.glimmer.app.data.NotificationScheduler
+import com.glimmer.app.data.PhotoStorage
 import com.glimmer.app.data.Reminder
 import com.glimmer.app.data.SettingsRepository
 import com.glimmer.app.data.birthMonthDay
@@ -196,12 +197,19 @@ class GlimmerViewModel(
     val profileEmail: StateFlow<String> = settingsRepository.profileEmail
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
+    val profileBirthday: StateFlow<Long?> = settingsRepository.profileBirthday
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     fun setProfileName(value: String) {
         viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setProfileName(value) }
     }
 
     fun setProfileEmail(value: String) {
         viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setProfileEmail(value) }
+    }
+
+    fun setProfileBirthday(value: Long?) {
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setProfileBirthday(value) }
     }
 
     /**
@@ -273,6 +281,10 @@ class GlimmerViewModel(
             val birthday = allBirthdays.value.firstOrNull { it.id == id }
             if (birthday != null) {
                 val offsets = repository.getRemindersForBirthdayOnce(id).map { it.daysBefore }
+                // The PREVIOUS lastDeleted (if any) is now unrecoverable — undo only ever offers
+                // the most recent delete — so this is the last point its photo file can be
+                // removed without risking breaking an undo that's still actually available.
+                lastDeleted?.first?.photoUri?.let { PhotoStorage.deleteManagedPhoto(getApplication(), it) }
                 lastDeleted = birthday to offsets
             }
             NotificationScheduler.cancelAllReminders(getApplication(), id)

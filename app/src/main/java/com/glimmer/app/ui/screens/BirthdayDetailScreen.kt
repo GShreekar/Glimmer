@@ -19,7 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +32,7 @@ import com.glimmer.app.data.birthMonthDay
 import com.glimmer.app.ui.components.BirthdayAvatar
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
+import com.glimmer.app.ui.components.NeumorphicSnackbarHost
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.viewmodel.GlimmerViewModel
 import com.glimmer.app.viewmodel.ageOnNextBirthday
@@ -146,10 +149,14 @@ fun BirthdayDetailScreen(
                     )
                 },
                 navigationIcon = {
+                    // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped by
+                    // the TopAppBar's own Surface at this size unless it's reduced.
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.padding(start = 8.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_cd_back), tint = MaterialTheme.colorScheme.primary)
                     }
@@ -158,7 +165,9 @@ fun BirthdayDetailScreen(
                     NeumorphicIconButton(
                         onClick = { onNavigateToEdit(id) },
                         modifier = Modifier.size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.detail_cd_edit), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
@@ -166,7 +175,9 @@ fun BirthdayDetailScreen(
                     NeumorphicIconButton(
                         onClick = { showDeleteDialog = true },
                         modifier = Modifier.padding(end = 12.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.detail_cd_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                     }
@@ -174,7 +185,7 @@ fun BirthdayDetailScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { NeumorphicSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Column(
@@ -241,9 +252,11 @@ fun BirthdayDetailScreen(
                 val noSmsAppMessage = stringResource(R.string.detail_snackbar_no_sms_app)
                 val noDialerAppMessage = stringResource(R.string.detail_snackbar_no_dialer_app)
                 val noBrowserMessage = stringResource(R.string.detail_snackbar_no_browser)
+                val noWhatsAppMessage = stringResource(R.string.detail_snackbar_no_whatsapp)
+                val noPhoneForWhatsAppMessage = stringResource(R.string.detail_snackbar_no_phone_whatsapp)
 
                 ActionButton(
-                    icon = Icons.Default.ChatBubble,
+                    icon = rememberVectorPainter(Icons.Default.ChatBubble),
                     label = stringResource(R.string.detail_action_message),
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.primary,
@@ -266,7 +279,7 @@ fun BirthdayDetailScreen(
                     }
                 )
                 ActionButton(
-                    icon = Icons.Default.Call,
+                    icon = rememberVectorPainter(Icons.Default.Call),
                     label = stringResource(R.string.detail_action_call),
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.tertiary,
@@ -284,7 +297,37 @@ fun BirthdayDetailScreen(
                     }
                 )
                 ActionButton(
-                    icon = Icons.Default.Redeem,
+                    icon = painterResource(R.drawable.ic_whatsapp),
+                    label = stringResource(R.string.detail_action_whatsapp),
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.secondary,
+                    bgColor = MaterialTheme.colorScheme.surface,
+                    onClick = {
+                        val phone = birthday.phoneNumber
+                        if (phone.isNullOrBlank()) {
+                            // Unlike Message/Call, there's no "open WhatsApp with nobody picked"
+                            // fallback — wa.me needs a number in the URL itself — so this is the
+                            // one action button that has to bail out early rather than open
+                            // something half-empty.
+                            coroutineScope.launch { snackbarHostState.showSnackbar(noPhoneForWhatsAppMessage) }
+                        } else {
+                            // wa.me wants the full international number as bare digits — no `+`,
+                            // spaces, or punctuation. If the number wasn't entered with a country
+                            // code this simply won't resolve to the right contact; there's no way
+                            // to know that from a phone number string alone.
+                            val digitsOnly = phone.filter { it.isDigit() }
+                            val waIntent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://wa.me/$digitsOnly?text=${Uri.encode(smsBody)}")
+                            )
+                            context.safeStartActivity(waIntent) {
+                                coroutineScope.launch { snackbarHostState.showSnackbar(noWhatsAppMessage) }
+                            }
+                        }
+                    }
+                )
+                ActionButton(
+                    icon = rememberVectorPainter(Icons.Default.Redeem),
                     label = stringResource(R.string.detail_action_gift),
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.onPrimary,
@@ -368,7 +411,7 @@ private fun DetailRow(label: String, value: String) {
 
 @Composable
 fun ActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: androidx.compose.ui.graphics.painter.Painter,
     label: String,
     modifier: Modifier,
     color: Color,

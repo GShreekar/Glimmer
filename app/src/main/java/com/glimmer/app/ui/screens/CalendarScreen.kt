@@ -137,6 +137,11 @@ fun CalendarScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // BUG: with no gap at all, the prev/next buttons' raised shadow bled straight up
+            // into the TopAppBar's paint layer (drawn above this content in the Scaffold's
+            // z-order) and got visibly cut off there — same underlying issue as the TopAppBar
+            // icon buttons above, just from proximity rather than a Surface clip.
+            item { Spacer(modifier = Modifier.height(12.dp)) }
             item {
                 // ── Month Navigation ─────────────────────────────────────
                 Row(

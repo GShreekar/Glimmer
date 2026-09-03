@@ -2,6 +2,7 @@ package com.glimmer.app.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -28,11 +29,15 @@ import com.glimmer.app.R
 import com.glimmer.app.data.Birthday
 import com.glimmer.app.data.ContactBirthdayCandidate
 import com.glimmer.app.data.ContactsBirthdayImporter
+import com.glimmer.app.data.PhotoStorage
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
+import com.glimmer.app.ui.components.NeumorphicSnackbarHost
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.viewmodel.GlimmerViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -93,7 +98,12 @@ fun ImportContactsScreen(
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        // BUG: see NeumorphicIconButton's own doc — a raised shadow at the
+                        // default size gets clipped by the TopAppBar's Surface unless it's this
+                        // much smaller.
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.import_cd_back), tint = MaterialTheme.colorScheme.onSurface)
                     }
@@ -101,7 +111,7 @@ fun ImportContactsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { NeumorphicSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -238,18 +248,29 @@ fun ImportContactsScreen(
                             onClick = {
                                 if (selected.isEmpty() || importing) return@NeumorphicButton
                                 importing = true
-                                val toImport = selected.map { index ->
-                                    val c = candidates[index]
-                                    Birthday(
-                                        name = c.name,
-                                        dateOfBirth = c.dateOfBirth,
-                                        birthYear = c.birthYear,
-                                        relationship = "Friend",
-                                        reminderEnabled = true,
-                                        contactLookupKey = c.contactLookupKey
-                                    )
-                                }
+                                val chosen = selected.map { candidates[it] }
                                 coroutineScope.launch {
+                                    // Copied into app-private storage up front (off the main
+                                    // thread) — same reasoning as Add/Edit's photo picker: a raw
+                                    // Contacts photo URI's read grant doesn't reliably outlive
+                                    // this process, so it has to become our own file now or the
+                                    // photo silently vanishes on next launch.
+                                    val toImport = withContext(Dispatchers.IO) {
+                                        chosen.map { c ->
+                                            val photo = c.photoUri?.let { uri ->
+                                                PhotoStorage.persistPickedPhoto(context, Uri.parse(uri))
+                                            }
+                                            Birthday(
+                                                name = c.name,
+                                                dateOfBirth = c.dateOfBirth,
+                                                birthYear = c.birthYear,
+                                                relationship = "Friend",
+                                                reminderEnabled = true,
+                                                contactLookupKey = c.contactLookupKey,
+                                                photoUri = photo
+                                            )
+                                        }
+                                    }
                                     // This screen (and its SnackbarHost) is torn down by the
                                     // navigate-back below, so the "N imported" confirmation goes
                                     // out on the same shared events channel BUG-33's delete-undo

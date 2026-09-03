@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ class SettingsRepository private constructor(private val context: Context) {
         val REMINDER_MINUTE = intPreferencesKey("reminder_minute")
         val PROFILE_NAME = stringPreferencesKey("profile_name")
         val PROFILE_EMAIL = stringPreferencesKey("profile_email")
+        val PROFILE_BIRTHDAY = longPreferencesKey("profile_birthday")
         val SHOW_ON_LOCK_SCREEN = booleanPreferencesKey("show_on_lock_screen")
     }
 
@@ -60,6 +62,11 @@ class SettingsRepository private constructor(private val context: Context) {
 
     val profileEmail: Flow<String> =
         context.settingsDataStore.data.map { it[Keys.PROFILE_EMAIL] ?: "" }
+
+    // Profile info only, same convention as dateOfBirth elsewhere (UTC-midnight millis) — not a
+    // Birthday row, so it never appears on Home/Calendar and never gets a reminder of its own.
+    val profileBirthday: Flow<Long?> =
+        context.settingsDataStore.data.map { it[Keys.PROFILE_BIRTHDAY] }
 
     // SEC-03: defaults to PRIVATE — a birthday notification naming a specific person is the kind
     // of thing that shouldn't be readable by anyone glancing at a locked phone by default. Off by
@@ -92,6 +99,12 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun setProfileEmail(value: String) {
         context.settingsDataStore.edit { it[Keys.PROFILE_EMAIL] = value }
+    }
+
+    suspend fun setProfileBirthday(value: Long?) {
+        context.settingsDataStore.edit {
+            if (value != null) it[Keys.PROFILE_BIRTHDAY] = value else it.remove(Keys.PROFILE_BIRTHDAY)
+        }
     }
 
     suspend fun setShowOnLockScreen(show: Boolean) {

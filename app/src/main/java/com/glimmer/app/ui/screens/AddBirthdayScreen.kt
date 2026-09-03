@@ -1,5 +1,6 @@
 package com.glimmer.app.ui.screens
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -37,17 +39,21 @@ import coil.compose.AsyncImage
 import com.glimmer.app.R
 import com.glimmer.app.data.Birthday
 import com.glimmer.app.data.NotificationScheduler
+import com.glimmer.app.data.PhotoStorage
 import com.glimmer.app.data.placeholderDateOfBirth
 import com.glimmer.app.data.yearOf
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
+import com.glimmer.app.ui.components.NeumorphicSnackbarHost
 import com.glimmer.app.ui.components.NeumorphicSwitch
 import com.glimmer.app.ui.components.NeumorphicTextField
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.ui.components.rememberBirthDatePickerState
 import com.glimmer.app.ui.components.rememberContactPickerLauncher
 import com.glimmer.app.viewmodel.GlimmerViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -58,10 +64,30 @@ fun AddBirthdayScreen(
     viewModel: GlimmerViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     var name by remember { mutableStateOf("") }
     var notificationsEnabled by remember { mutableStateOf(true) }
     var notes by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
+    // BUG: a picked photo used to vanish after the app was killed and reopened — the Photo
+    // Picker's and the contact picker's URIs only grant read access for this process's lifetime.
+    // persistAndReplacePhoto below copies the bytes into app-private storage (PhotoStorage)
+    // immediately, so what's stored is a URI the app owns forever, not a borrowed one. Nothing in
+    // the DB can reference the PREVIOUS value yet (this is a brand new person), so it's always
+    // safe to delete it the moment it's replaced by a newer pick.
+    var photoUri by remember { mutableStateOf<String?>(null) }
+    suspend fun persistAndReplacePhoto(sourceUri: Uri) {
+        val old = photoUri
+        val persisted = withContext(Dispatchers.IO) {
+            PhotoStorage.persistPickedPhoto(context, sourceUri)?.also {
+                old?.let { previous -> PhotoStorage.deleteManagedPhoto(context, previous) }
+            }
+        }
+        if (persisted != null) photoUri = persisted
+    }
+
     // FEAT-01: set when the phone number came from the contact picker below, so the person can
     // later be re-synced against the same Contacts row (a future "refresh from contacts").
     var contactLookupKey by remember { mutableStateOf<String?>(null) }
@@ -69,6 +95,11 @@ fun AddBirthdayScreen(
         picked.phoneNumber?.let { phoneNumber = it }
         contactLookupKey = picked.lookupKey
         if (name.isBlank()) picked.name?.let { name = it }
+        // FEAT-02/contact photo: not every contact has one, and WhatsApp's own picture isn't
+        // reachable via any public API — see PickedContact.photoUri.
+        picked.photoUri?.let { rawUri ->
+            coroutineScope.launch { persistAndReplacePhoto(Uri.parse(rawUri)) }
+        }
     }
 
     var dateOfBirth by remember { mutableStateOf<Long?>(null) }
@@ -79,14 +110,13 @@ fun AddBirthdayScreen(
     // is simply discarded at save time — see placeholderDateOfBirth.
     var yearUnknown by remember { mutableStateOf(false) }
 
-    // The avatar was decorative — tapping it did nothing and photoUri was never populated.
-    // PickVisualMedia (the system Photo Picker) needs no storage permission and its granted
-    // read access to the returned URI persists for the app's lifetime, so the URI can just be
-    // stored as-is.
-    var photoUri by remember { mutableStateOf<String?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
-    ) { uri -> if (uri != null) photoUri = uri.toString() }
+    ) { uri ->
+        if (uri != null) {
+            coroutineScope.launch { persistAndReplacePhoto(uri) }
+        }
+    }
 
     var relationship by remember { mutableStateOf("") }
     var showRelationshipDropdown by remember { mutableStateOf(false) }
@@ -103,7 +133,6 @@ fun AddBirthdayScreen(
     var dateError by remember { mutableStateOf(false) }
     var relationshipError by remember { mutableStateOf(false) }
 
-    val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val duplicateMessageTemplate = stringResource(R.string.field_duplicate_snackbar)
 
@@ -146,7 +175,11 @@ fun AddBirthdayScreen(
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped
+                        // by the TopAppBar's own Surface at this size unless it's reduced.
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
@@ -158,7 +191,7 @@ fun AddBirthdayScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { NeumorphicSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Column(

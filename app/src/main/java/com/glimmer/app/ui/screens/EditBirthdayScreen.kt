@@ -1,5 +1,6 @@
 package com.glimmer.app.ui.screens
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,22 +30,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.glimmer.app.R
+import com.glimmer.app.data.PhotoStorage
 import com.glimmer.app.data.placeholderDateOfBirth
 import com.glimmer.app.data.yearOf
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
+import com.glimmer.app.ui.components.NeumorphicSnackbarHost
 import com.glimmer.app.ui.components.NeumorphicSwitch
 import com.glimmer.app.ui.components.NeumorphicTextField
 import com.glimmer.app.ui.components.neumorphic
 import com.glimmer.app.ui.components.rememberBirthDatePickerState
 import com.glimmer.app.ui.components.rememberContactPickerLauncher
 import com.glimmer.app.viewmodel.GlimmerViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,6 +85,9 @@ fun EditBirthdayScreen(
         return
     }
 
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     // Keyed on birthday.id, not the birthday object itself: any background re-emission of the
     // same row from Room (e.g. after a re-arm elsewhere) produces a new Birthday instance with
     // the same id, and remember(birthday) would treat that as a reason to re-seed every field —
@@ -88,9 +97,32 @@ fun EditBirthdayScreen(
     var notes by remember(birthday.id) { mutableStateOf(birthday.notes ?: "") }
     var phoneNumber by remember(birthday.id) { mutableStateOf(birthday.phoneNumber ?: "") }
     var contactLookupKey by remember(birthday.id) { mutableStateOf(birthday.contactLookupKey) }
+    // See AddBirthdayScreen: the avatar is now tappable and actually saves what's picked. The raw
+    // picker URIs only grant read access for this process's lifetime — exactly why a picked photo
+    // used to vanish after the app was killed and reopened — so persistAndReplacePhoto below
+    // copies them into app-private storage (PhotoStorage) immediately. Unlike Add, this person's
+    // CURRENT photo (originalPhotoUri) is still referenced by the DB row until Save actually
+    // commits the change, so it must survive a re-pick-then-back-out-without-saving — only a
+    // DRAFT from this same editing session (i.e. not originalPhotoUri) is safe to delete right
+    // away when replaced again; the original itself is only cleaned up in the Save handler below.
+    val originalPhotoUri = remember(birthday.id) { birthday.photoUri }
+    var photoUri by remember(birthday.id) { mutableStateOf(birthday.photoUri) }
+    suspend fun persistAndReplacePhoto(sourceUri: Uri) {
+        val old = photoUri
+        val persisted = withContext(Dispatchers.IO) {
+            PhotoStorage.persistPickedPhoto(context, sourceUri)?.also {
+                if (old != null && old != originalPhotoUri) PhotoStorage.deleteManagedPhoto(context, old)
+            }
+        }
+        if (persisted != null) photoUri = persisted
+    }
+
     val pickContact = rememberContactPickerLauncher { picked ->
         picked.phoneNumber?.let { phoneNumber = it }
         contactLookupKey = picked.lookupKey
+        picked.photoUri?.let { rawUri ->
+            coroutineScope.launch { persistAndReplacePhoto(Uri.parse(rawUri)) }
+        }
     }
 
     var dateOfBirth by remember(birthday.id) { mutableStateOf<Long?>(birthday.dateOfBirth) }
@@ -98,11 +130,13 @@ fun EditBirthdayScreen(
     val datePickerState = rememberBirthDatePickerState(initialSelectedDateMillis = birthday.dateOfBirth)
     var yearUnknown by remember(birthday.id) { mutableStateOf(birthday.birthYear == null) }
 
-    // See AddBirthdayScreen: the avatar is now tappable and actually saves what's picked.
-    var photoUri by remember(birthday.id) { mutableStateOf(birthday.photoUri) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
-    ) { uri -> if (uri != null) photoUri = uri.toString() }
+    ) { uri ->
+        if (uri != null) {
+            coroutineScope.launch { persistAndReplacePhoto(uri) }
+        }
+    }
 
     var relationship by remember(birthday.id) { mutableStateOf(birthday.relationship) }
     var showRelationshipDropdown by remember { mutableStateOf(false) }
@@ -118,7 +152,6 @@ fun EditBirthdayScreen(
     var nameError by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf(false) }
 
-    val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val duplicateMessageTemplate = stringResource(R.string.field_duplicate_snackbar)
 
@@ -161,7 +194,11 @@ fun EditBirthdayScreen(
                     NeumorphicIconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
-                        cornerRadius = 20.dp
+                        cornerRadius = 20.dp,
+                        // BUG: see NeumorphicIconButton's doc — its default shadow gets clipped
+                        // by the TopAppBar's own Surface at this size unless it's reduced.
+                        elevation = 3.dp,
+                        blur = 6.dp
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.edit_cd_back), tint = MaterialTheme.colorScheme.onSurface)
                     }
@@ -169,7 +206,7 @@ fun EditBirthdayScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { NeumorphicSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Column(
@@ -387,6 +424,12 @@ fun EditBirthdayScreen(
                                 ),
                                 reminderOffsets = selectedOffsets
                             )
+                            // Only now — with the change actually handed off to be saved — is it
+                            // safe to remove the photo this person used to have. See
+                            // persistAndReplacePhoto above for why this couldn't happen earlier.
+                            if (originalPhotoUri != null && originalPhotoUri != photoUri) {
+                                withContext(Dispatchers.IO) { PhotoStorage.deleteManagedPhoto(context, originalPhotoUri) }
+                            }
                             onNavigateBack()
                         }
                     }

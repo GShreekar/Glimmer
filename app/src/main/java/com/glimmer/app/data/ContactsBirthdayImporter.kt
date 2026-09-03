@@ -13,7 +13,11 @@ data class ContactBirthdayCandidate(
     val name: String,
     val dateOfBirth: Long,
     val birthYear: Int?,
-    val contactLookupKey: String?
+    val contactLookupKey: String?,
+    // The contact's saved photo, if any — see PickedContact.photoUri for why this can't ever be
+    // a WhatsApp picture. Copied into app-private storage (PhotoStorage) only for the candidates
+    // actually imported, not for every contact scanned.
+    val photoUri: String?
 )
 
 /**
@@ -28,7 +32,8 @@ object ContactsBirthdayImporter {
         val projection = arrayOf(
             ContactsContract.Data.DISPLAY_NAME_PRIMARY,
             ContactsContract.CommonDataKinds.Event.START_DATE,
-            ContactsContract.Data.LOOKUP_KEY
+            ContactsContract.Data.LOOKUP_KEY,
+            ContactsContract.Data.PHOTO_URI
         )
         val selection = "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.Event.TYPE} = ?"
         val selectionArgs = arrayOf(
@@ -42,13 +47,15 @@ object ContactsBirthdayImporter {
                 val nameIdx = cursor.getColumnIndex(ContactsContract.Data.DISPLAY_NAME_PRIMARY)
                 val dateIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Event.START_DATE)
                 val lookupIdx = cursor.getColumnIndex(ContactsContract.Data.LOOKUP_KEY)
+                val photoIdx = cursor.getColumnIndex(ContactsContract.Data.PHOTO_URI)
                 while (cursor.moveToNext()) {
                     val name = nameIdx.takeIf { it >= 0 }?.let { cursor.getString(it) }
                     val rawDate = dateIdx.takeIf { it >= 0 }?.let { cursor.getString(it) }
                     val lookupKey = lookupIdx.takeIf { it >= 0 }?.let { cursor.getString(it) }
+                    val photoUri = photoIdx.takeIf { it >= 0 }?.let { cursor.getString(it) }
                     if (name.isNullOrBlank() || rawDate.isNullOrBlank()) continue
                     val (millis, year) = parseContactDate(rawDate) ?: continue
-                    results.add(ContactBirthdayCandidate(name, millis, year, lookupKey))
+                    results.add(ContactBirthdayCandidate(name, millis, year, lookupKey, photoUri))
                 }
             }
         } catch (t: Throwable) {
