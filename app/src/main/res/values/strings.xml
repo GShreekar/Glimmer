@@ -4,6 +4,7 @@
     <!-- Shared -->
     <string name="common_ok">OK</string>
     <string name="common_cancel">Cancel</string>
+    <string name="common_undo">Undo</string>
 
     <!-- Bottom navigation -->
     <string name="nav_home">Home</string>
@@ -27,6 +28,7 @@
     <string name="home_cd_dismiss">Dismiss</string>
     <string name="home_turning_today">Turning %1$d today! 🎂</string>
     <string name="home_send_wish">View &amp; Send a Wish</string>
+    <string name="home_undo_delete_message">%1$s was deleted</string>
     <string name="days_until_today">Today!</string>
     <string name="days_until_tomorrow">Tomorrow</string>
     <plurals name="days_until_n">
@@ -61,6 +63,7 @@
     <string name="add_heading">New Birthday</string>
     <string name="add_subheading">Who are we celebrating?</string>
     <string name="add_save_button">Save Reminder</string>
+    <string name="field_duplicate_snackbar">%1$s already has a birthday saved on this date</string>
 
     <!-- Edit screen -->
     <string name="edit_title">Edit Birthday</string>
@@ -149,6 +152,8 @@
     <string name="notif_settings_sound_subtitle">Play sound for alerts</string>
     <string name="notif_settings_default_reminder_title">Default Reminder</string>
     <string name="notif_settings_default_reminder_subtitle">Used to pre-fill new birthdays</string>
+    <string name="notif_settings_reminder_time_title">Reminder Time</string>
+    <string name="notif_settings_reminder_time_subtitle">What time reminders are sent</string>
 
     <!-- Profile settings screen -->
     <string name="profile_title">User Profile</string>

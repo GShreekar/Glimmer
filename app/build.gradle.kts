@@ -9,11 +9,14 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  // BUG-34: was namespace "com.example" (the Android Studio template default, never renamed) with
+  // applicationId "com.aistudio.glimmer.celebration" (leftover from AI Studio scaffolding) —
+  // neither reflected the actual product. Both now live under one real, owned package.
+  namespace = "com.glimmer.app"
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "com.aistudio.glimmer.celebration"
+    applicationId = "com.glimmer.app"
     minSdk = 24
     targetSdk = 36
     versionCode = 1

@@ -39,7 +39,7 @@
 
         <!-- Receiver for birthday alarm notifications -->
         <receiver
-            android:name="com.example.data.BirthdayAlarmReceiver"
+            android:name="com.glimmer.app.data.BirthdayAlarmReceiver"
             android:exported="false" />
 
         <!--
@@ -49,7 +49,7 @@
           computed in the device's local zone; see NotificationScheduler.scheduleReminder).
         -->
         <receiver
-            android:name="com.example.data.BootReceiver"
+            android:name="com.glimmer.app.data.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
