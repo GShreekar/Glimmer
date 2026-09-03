@@ -1,6 +1,14 @@
 package com.glimmer.app.data
 
 import kotlinx.serialization.Serializable
+// The reified, single-argument encodeToString/decodeFromString convenience functions live in this
+// package, NOT in kotlinx.serialization.json — Json only declares the (SerializationStrategy,
+// value) member overload directly. Without this import the compiler can't see the reified ones at
+// all, so `Json.encodeToString<T>(value)` silently resolves to the 2-arg member instead, no matter
+// what type argument is given — the actual cause of the previous "no value passed for parameter
+// 'value'" build failure.
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
@@ -18,10 +26,7 @@ data class WishTemplates(
 ) {
     fun resolve(relationship: String): String = perRelationship[relationship]?.takeIf { it.isNotBlank() } ?: default
 
-    // Explicit reified type argument — Json.encodeToString(this) alone lets the compiler resolve
-    // to the (serializer, value) two-arg overload instead of the reified one-arg extension,
-    // treating `this` as a SerializationStrategy and complaining there's no `value` supplied.
-    fun toJson(): String = Json.encodeToString<WishTemplates>(this)
+    fun toJson(): String = Json.encodeToString(this)
 
     companion object {
         const val DEFAULT_TEMPLATE = "Happy Birthday {name}! 🎂🎉"
