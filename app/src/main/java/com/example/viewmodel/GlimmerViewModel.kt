@@ -93,6 +93,26 @@ class GlimmerViewModel(
         viewModelScope.launch { settingsRepository.setDefaultReminderTime(value) }
     }
 
+    // ── Profile (backed by the same DataStore) ─────────────────────────────────────────────
+    // A single source of truth means SettingsScreen's display and ProfileSettingsScreen's editor
+    // can never drift apart — the old SharedPreferences + derivedStateOf combination in
+    // SettingsScreen only refreshed on process restart, since derivedStateOf only re-evaluates
+    // when a Compose State it reads changes, and SharedPreferences isn't one.
+
+    val profileName: StateFlow<String> = settingsRepository.profileName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val profileEmail: StateFlow<String> = settingsRepository.profileEmail
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    fun setProfileName(value: String) {
+        viewModelScope.launch { settingsRepository.setProfileName(value) }
+    }
+
+    fun setProfileEmail(value: String) {
+        viewModelScope.launch { settingsRepository.setProfileEmail(value) }
+    }
+
     fun insertBirthday(birthday: Birthday) {
         viewModelScope.launch {
             // Room assigns the real primary key here; the incoming `birthday` still carries the

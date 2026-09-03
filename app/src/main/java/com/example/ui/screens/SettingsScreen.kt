@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -15,8 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.ui.components.NeumorphicSwitch
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.neumorphic
@@ -30,17 +30,18 @@ fun SettingsScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToSync: () -> Unit = {}
 ) {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("glimmer_profile", Context.MODE_PRIVATE) }
-    val displayName by remember { derivedStateOf { prefs.getString("name", "Alex Mercer") ?: "Alex Mercer" } }
-    val email by remember { derivedStateOf { prefs.getString("email", "alex.mercer@example.com") ?: "alex.mercer@example.com" } }
+    // Both driven by the same ViewModel/DataStore-backed StateFlow that ProfileSettingsScreen
+    // writes to, so this screen updates the moment a name/email is saved there — no restart
+    // needed, and no separate "not set yet" default to keep in sync with that screen's own.
+    val displayName by viewModel.profileName.collectAsState()
+    val email by viewModel.profileEmail.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Settings",
+                        stringResource(R.string.settings_title),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -83,7 +84,7 @@ fun SettingsScreen(
                 ) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit Profile",
+                        contentDescription = stringResource(R.string.settings_cd_edit_profile),
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -91,33 +92,33 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Text(displayName, style = MaterialTheme.typography.headlineMedium)
-            Text(email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(displayName.ifBlank { stringResource(R.string.settings_default_name) }, style = MaterialTheme.typography.headlineMedium)
+            Text(email.ifBlank { stringResource(R.string.settings_default_email) }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Spacer(modifier = Modifier.height(32.dp))
 
             // ── Settings Categories ──────────────────────────────────────
-            SettingsCategory("ACCOUNT") {
+            SettingsCategory(stringResource(R.string.settings_category_account)) {
                 SettingsItem(
-                    title = "User Profile",
+                    title = stringResource(R.string.settings_item_user_profile),
                     icon = Icons.Default.Person,
                     iconColor = MaterialTheme.colorScheme.primary,
                     onClick = onNavigateToProfile
                 )
                 SettingsItem(
-                    title = "Sync & Backup",
+                    title = stringResource(R.string.settings_item_sync_backup),
                     icon = Icons.Default.CloudSync,
                     iconColor = MaterialTheme.colorScheme.primary,
                     onClick = onNavigateToSync
                 )
             }
 
-            SettingsCategory("PREFERENCES") {
+            SettingsCategory(stringResource(R.string.settings_category_preferences)) {
                 SettingsItem(
-                    title = "Notifications",
+                    title = stringResource(R.string.settings_item_notifications),
                     icon = Icons.Default.Notifications,
                     iconColor = MaterialTheme.colorScheme.secondary,
-                    subtitle = "Time of day, sounds",
+                    subtitle = stringResource(R.string.settings_item_notifications_subtitle),
                     onClick = onNavigateToNotifications
                 )
             }

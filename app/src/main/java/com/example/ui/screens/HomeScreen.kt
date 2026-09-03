@@ -23,7 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.Birthday
 import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicButton
@@ -65,7 +68,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Glimmer",
+                        stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -80,7 +83,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             Icons.Default.NotificationsNone,
-                            contentDescription = "Notifications",
+                            contentDescription = stringResource(R.string.home_cd_notifications),
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
@@ -95,7 +98,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             Icons.Default.Person,
-                            contentDescription = "Profile",
+                            contentDescription = stringResource(R.string.home_cd_profile),
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -115,7 +118,7 @@ fun HomeScreen(
             ) {
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Add Birthday",
+                    contentDescription = stringResource(R.string.home_cd_add_birthday),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(28.dp)
                 )
@@ -153,7 +156,11 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f),
                             decorationBox = { inner ->
                                 if (searchQuery.isEmpty()) {
-                                    Text("Search friends, family...", color = MaterialTheme.colorScheme.outlineVariant, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        stringResource(R.string.home_search_placeholder),
+                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
                                 }
                                 inner()
                             }
@@ -179,7 +186,7 @@ fun HomeScreen(
                         Icon(Icons.Default.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Today 🎉",
+                            stringResource(R.string.home_section_today),
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -194,7 +201,10 @@ fun HomeScreen(
             // ── Upcoming Birthdays ────────────────────────────────────────
             item {
                 Text(
-                    if (upcomingBirthdays.isEmpty() && todayBirthdays.isEmpty()) "No Birthdays Yet" else "Upcoming",
+                    if (upcomingBirthdays.isEmpty() && todayBirthdays.isEmpty())
+                        stringResource(R.string.home_section_none_yet)
+                    else
+                        stringResource(R.string.home_section_upcoming),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -211,8 +221,8 @@ fun HomeScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Icon(Icons.Default.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(48.dp))
-                            Text("No birthdays added yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-                            Text("Tap + to add your first one!", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outlineVariant)
+                            Text(stringResource(R.string.home_empty_title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                            Text(stringResource(R.string.home_empty_subtitle), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
@@ -250,20 +260,20 @@ private fun ReminderHealthBanner(onFixClick: () -> Unit, onDismiss: () -> Unit) 
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Reminders may not fire", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                Text(stringResource(R.string.home_reminder_warning_title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
                 Text(
-                    "A permission Glimmer needs is turned off",
+                    stringResource(R.string.home_reminder_warning_subtitle),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
             TextButton(onClick = onFixClick) {
-                Text("Fix", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.home_reminder_warning_fix), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
             }
             IconButton(onClick = onDismiss) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Dismiss",
+                    contentDescription = stringResource(R.string.home_cd_dismiss),
                     tint = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.size(18.dp)
                 )
@@ -295,7 +305,11 @@ private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(birthday.name, style = MaterialTheme.typography.headlineMedium)
-                    Text("Turning $age today! 🎂", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+                    Text(
+                        stringResource(R.string.home_turning_today, age),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                     Text(birthday.relationship, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
                 }
             }
@@ -308,7 +322,7 @@ private fun TodayBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("View & Send a Wish", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.home_send_wish), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -321,9 +335,9 @@ private fun UpcomingBirthdayCard(birthday: Birthday, onClick: () -> Unit) {
     val dayStr = "${monthDay.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${monthDay.dayOfMonth}"
     val daysLeft = daysUntilBirthday(birthday)
     val daysLabel = when (daysLeft) {
-        0 -> "Today!"
-        1 -> "Tomorrow"
-        else -> "$daysLeft days"
+        0 -> stringResource(R.string.days_until_today)
+        1 -> stringResource(R.string.days_until_tomorrow)
+        else -> pluralStringResource(R.plurals.days_until_n, daysLeft, daysLeft)
     }
 
     Box(

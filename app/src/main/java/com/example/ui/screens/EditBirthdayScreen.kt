@@ -21,14 +21,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.Birthday
 import com.example.ui.components.NeumorphicButton
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.NeumorphicSwitch
 import com.example.ui.components.NeumorphicTextField
 import com.example.ui.components.neumorphic
+import com.example.ui.components.rememberBirthDatePickerState
 import com.example.viewmodel.GlimmerViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,20 +55,24 @@ fun EditBirthdayScreen(
         return
     }
 
-    var name by remember(birthday) { mutableStateOf(birthday.name) }
-    var notificationsEnabled by remember(birthday) { mutableStateOf(birthday.reminderEnabled) }
-    var notes by remember(birthday) { mutableStateOf(birthday.notes ?: "") }
-    var phoneNumber by remember(birthday) { mutableStateOf(birthday.phoneNumber ?: "") }
+    // Keyed on birthday.id, not the birthday object itself: any background re-emission of the
+    // same row from Room (e.g. after a re-arm elsewhere) produces a new Birthday instance with
+    // the same id, and remember(birthday) would treat that as a reason to re-seed every field —
+    // silently discarding whatever the user had typed but not yet saved.
+    var name by remember(birthday.id) { mutableStateOf(birthday.name) }
+    var notificationsEnabled by remember(birthday.id) { mutableStateOf(birthday.reminderEnabled) }
+    var notes by remember(birthday.id) { mutableStateOf(birthday.notes ?: "") }
+    var phoneNumber by remember(birthday.id) { mutableStateOf(birthday.phoneNumber ?: "") }
 
-    var dateOfBirth by remember(birthday) { mutableStateOf<Long?>(birthday.dateOfBirth) }
+    var dateOfBirth by remember(birthday.id) { mutableStateOf<Long?>(birthday.dateOfBirth) }
     var showDatePicker by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = birthday.dateOfBirth)
+    val datePickerState = rememberBirthDatePickerState(initialSelectedDateMillis = birthday.dateOfBirth)
 
-    var relationship by remember(birthday) { mutableStateOf(birthday.relationship) }
+    var relationship by remember(birthday.id) { mutableStateOf(birthday.relationship) }
     var showRelationshipDropdown by remember { mutableStateOf(false) }
     val relationships = listOf("Family", "Friend", "Partner", "Colleague", "Other")
 
-    var reminderType by remember(birthday) { mutableStateOf(birthday.reminderTime.ifBlank { "1 day before" }) }
+    var reminderType by remember(birthday.id) { mutableStateOf(birthday.reminderTime.ifBlank { "1 day before" }) }
     var showReminderDropdown by remember { mutableStateOf(false) }
     val reminderOptions = listOf("On the day", "1 day before", "3 days before", "1 week before")
 
@@ -86,10 +93,10 @@ fun EditBirthdayScreen(
                     showDatePicker = false
                     dateOfBirth = datePickerState.selectedDateMillis
                     dateError = false
-                }) { Text("OK") }
+                }) { Text(stringResource(R.string.common_ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.common_cancel)) }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -101,7 +108,7 @@ fun EditBirthdayScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Edit Birthday",
+                        stringResource(R.string.edit_title),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -112,7 +119,7 @@ fun EditBirthdayScreen(
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
                         cornerRadius = 20.dp
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.edit_cd_back), tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -129,34 +136,34 @@ fun EditBirthdayScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(20.dp))
-            Text("Update Birthday", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-            Text("Edit ${birthday.name}'s details", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.edit_heading), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.edit_subheading, birthday.name), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
 
-                FormEntry(label = "Name", error = if (nameError) "Name is required" else null) {
+                FormEntry(label = stringResource(R.string.field_label_name), error = if (nameError) stringResource(R.string.field_error_name_required) else null) {
                     NeumorphicTextField(
                         value = name,
                         onValueChange = { name = it; nameError = false },
-                        placeholder = "e.g., Alex Johnson",
+                        placeholder = stringResource(R.string.field_placeholder_name),
                         icon = Icons.Default.Person
                     )
                 }
 
-                FormEntry(label = "Date of Birth", error = if (dateError) "Please select a date" else null) {
+                FormEntry(label = stringResource(R.string.field_label_dob), error = if (dateError) stringResource(R.string.field_error_date_required) else null) {
                     NeumorphicTextField(
                         value = if (dateOfBirth != null) dateFormatter.format(Date(dateOfBirth!!)) else "",
                         onValueChange = {},
-                        placeholder = "Select Date",
+                        placeholder = stringResource(R.string.field_placeholder_select_date),
                         icon = Icons.Default.Cake,
                         readOnly = true,
                         onClick = { showDatePicker = true }
                     )
                 }
 
-                FormEntry(label = "Relationship") {
+                FormEntry(label = stringResource(R.string.field_label_relationship)) {
                     ExposedDropdownMenuBox(
                         expanded = showRelationshipDropdown,
                         onExpandedChange = { showRelationshipDropdown = it }
@@ -164,7 +171,7 @@ fun EditBirthdayScreen(
                         NeumorphicTextField(
                             value = relationship,
                             onValueChange = {},
-                            placeholder = "Select category",
+                            placeholder = stringResource(R.string.field_placeholder_select_category),
                             icon = Icons.Default.Group,
                             trailingIcon = if (showRelationshipDropdown) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             readOnly = true,
@@ -188,21 +195,21 @@ fun EditBirthdayScreen(
                     }
                 }
 
-                FormEntry(label = "Phone Number (optional)") {
+                FormEntry(label = stringResource(R.string.field_label_phone)) {
                     NeumorphicTextField(
                         value = phoneNumber,
                         onValueChange = { phoneNumber = it },
-                        placeholder = "e.g., (555) 123-4567",
+                        placeholder = stringResource(R.string.field_placeholder_phone),
                         icon = Icons.Default.Call,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                     )
                 }
 
-                FormEntry(label = "Notes (optional)") {
+                FormEntry(label = stringResource(R.string.field_label_notes)) {
                     NeumorphicTextField(
                         value = notes,
                         onValueChange = { notes = it },
-                        placeholder = "Gift ideas, preferences...",
+                        placeholder = stringResource(R.string.field_placeholder_notes),
                         icon = Icons.Default.Person
                     )
                 }
@@ -213,7 +220,7 @@ fun EditBirthdayScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Text("Reminders", style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.field_label_reminders), style = MaterialTheme.typography.headlineMedium)
 
                 Row(
                     modifier = Modifier
@@ -233,8 +240,8 @@ fun EditBirthdayScreen(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text("Send Notification", style = MaterialTheme.typography.bodyMedium)
-                            Text("Get reminded in advance", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            Text(stringResource(R.string.field_send_notification), style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.field_send_notification_subtitle), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                     NeumorphicSwitch(checked = notificationsEnabled, onCheckedChange = { notificationsEnabled = it })
@@ -245,11 +252,11 @@ fun EditBirthdayScreen(
                         expanded = showReminderDropdown,
                         onExpandedChange = { showReminderDropdown = it }
                     ) {
-                        FormEntry(label = "Remind me") {
+                        FormEntry(label = stringResource(R.string.field_label_remind_me)) {
                             NeumorphicTextField(
                                 value = reminderType,
                                 onValueChange = {},
-                                placeholder = "Select time",
+                                placeholder = stringResource(R.string.field_placeholder_select_time),
                                 icon = Icons.Default.Schedule,
                                 trailingIcon = if (showReminderDropdown) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                 readOnly = true,
@@ -302,7 +309,7 @@ fun EditBirthdayScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Update Reminder", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(R.string.edit_save_button), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
                 }
             }
 

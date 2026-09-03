@@ -1,8 +1,11 @@
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
+  // Was pinned to a hardcoded "2.0.21" while the Kotlin compiler itself (libs.versions.toml's
+  // `kotlin`) is 2.2.10 — the serialization compiler plugin must track the same Kotlin version
+  // it's compiling against, so it's now sourced from the same version.ref as everything else.
+  alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.google.devtools.ksp)
-  kotlin("plugin.serialization") version "2.0.21"
 }
 
 android {
@@ -36,6 +39,13 @@ android {
     compose = true
     buildConfig = true
   }
+}
+
+// Paired with exportSchema = true on @Database (AppDatabase.kt): writes a versioned JSON schema
+// to app/schemas/ on every build, which MigrationTestHelper needs to test a Migration against the
+// database's real starting shape rather than just what the code claims it looked like.
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

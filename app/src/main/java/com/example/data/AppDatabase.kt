@@ -7,7 +7,11 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Birthday::class], version = 3, exportSchema = false)
+// exportSchema = true (with room.schemaLocation set in app/build.gradle.kts) writes a versioned
+// JSON schema to app/schemas/ on every build — commit those files. Without them, MigrationTestHelper
+// has nothing to migrate FROM, so a migration like MIGRATION_2_3 below can't be tested against the
+// real starting schema, only asserted about by reading the code.
+@Database(entities = [Birthday::class], version = 3, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun birthdayDao(): BirthdayDao
 

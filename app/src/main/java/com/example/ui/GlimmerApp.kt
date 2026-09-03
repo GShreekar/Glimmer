@@ -102,6 +102,7 @@ fun GlimmerApp(viewModel: GlimmerViewModel) {
             }
             composable<ProfileRoute> {
                 com.example.ui.screens.ProfileSettingsScreen(
+                    viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

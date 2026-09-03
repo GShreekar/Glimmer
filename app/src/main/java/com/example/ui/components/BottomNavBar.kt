@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -26,12 +25,15 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.R
 import com.example.ui.HomeRoute
 import com.example.ui.AddRoute
 import com.example.ui.CalendarRoute
@@ -40,6 +42,21 @@ import com.example.ui.SettingsRoute
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+
+/**
+ * Navigates to a top-level bottom-nav destination the standard way: [popUpTo] the graph's start
+ * destination with `saveState = true` so switching tabs doesn't grow the back stack (previously
+ * every tap pushed a new entry — Calendar → Settings → Calendar ×10 needed 10 presses of Back to
+ * leave), `launchSingleTop` so re-tapping the current tab doesn't duplicate it, and
+ * `restoreState` so a tab's scroll position / state survives switching away and back.
+ */
+private fun NavController.navigateToTopLevel(route: Any) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
 
 @Composable
 fun BottomNavBar(navController: NavController) {
@@ -56,46 +73,39 @@ fun BottomNavBar(navController: NavController) {
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val isHome = currentDestination?.hierarchy?.any { it.route?.contains("HomeRoute") == true } == true
+        // hasRoute<T>() matches by the actual route type, not a substring of its serialized
+        // name — the old `route?.contains("HomeRoute")` would also match e.g. a hypothetical
+        // "HomeRouteDetail" route.
+        val isHome = currentDestination?.hierarchy?.any { it.hasRoute<HomeRoute>() } == true
         NavItem(
             icon = Icons.Filled.Home,
-            label = "Home",
+            label = stringResource(R.string.nav_home),
             selected = isHome,
-            onClick = {
-                navController.navigate(HomeRoute) {
-                    popUpTo(HomeRoute) { inclusive = true }
-                }
-            }
+            onClick = { navController.navigateToTopLevel(HomeRoute) }
         )
-        
-        val isAdd = currentDestination?.hierarchy?.any { it.route?.contains("AddRoute") == true } == true
+
+        val isAdd = currentDestination?.hierarchy?.any { it.hasRoute<AddRoute>() } == true
         NavItem(
             icon = Icons.Filled.AddCircle,
-            label = "Add",
+            label = stringResource(R.string.nav_add),
             selected = isAdd,
-            onClick = {
-                navController.navigate(AddRoute)
-            }
+            onClick = { navController.navigateToTopLevel(AddRoute) }
         )
-        
-        val isCalendar = currentDestination?.hierarchy?.any { it.route?.contains("CalendarRoute") == true } == true
+
+        val isCalendar = currentDestination?.hierarchy?.any { it.hasRoute<CalendarRoute>() } == true
         NavItem(
             icon = Icons.Filled.CalendarMonth,
-            label = "Calendar",
+            label = stringResource(R.string.nav_calendar),
             selected = isCalendar,
-            onClick = {
-                navController.navigate(CalendarRoute)
-            }
+            onClick = { navController.navigateToTopLevel(CalendarRoute) }
         )
-        
-        val isSettings = currentDestination?.hierarchy?.any { it.route?.contains("SettingsRoute") == true } == true
+
+        val isSettings = currentDestination?.hierarchy?.any { it.hasRoute<SettingsRoute>() } == true
         NavItem(
             icon = Icons.Filled.Settings,
-            label = "Settings",
+            label = stringResource(R.string.nav_settings),
             selected = isSettings,
-            onClick = {
-                navController.navigate(SettingsRoute)
-            }
+            onClick = { navController.navigateToTopLevel(SettingsRoute) }
         )
     }
 }
@@ -110,7 +120,7 @@ private fun NavItem(
     val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    
+
     val modifier = if (selected) {
         Modifier.neumorphic(isSunken = true, cornerRadius = 12.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface)
     } else {

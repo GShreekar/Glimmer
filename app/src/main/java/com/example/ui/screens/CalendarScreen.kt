@@ -23,9 +23,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.Birthday
 import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicIconButton
@@ -98,7 +102,7 @@ fun CalendarScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Calendar",
+                        stringResource(R.string.calendar_title),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -131,7 +135,7 @@ fun CalendarScreen(
                         },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "Previous", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.ChevronLeft, contentDescription = stringResource(R.string.calendar_cd_previous), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -148,7 +152,7 @@ fun CalendarScreen(
                         },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Next", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.ChevronRight, contentDescription = stringResource(R.string.calendar_cd_next), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -169,7 +173,7 @@ fun CalendarScreen(
                         contentPadding = PaddingValues(vertical = 8.dp),
                         userScrollEnabled = false
                     ) {
-                        val weekDays = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+                        val weekDays = stringArrayResource(R.array.calendar_weekday_abbreviations).toList()
                         items(weekDays) { day ->
                             Text(
                                 text = day,
@@ -256,10 +260,14 @@ fun CalendarScreen(
 
             // ── Birthday List ─────────────────────────────────────────────
             item {
+                // Snapshotted into a local val so the null check below can smart-cast it — a
+                // `var` from `by remember { mutableStateOf(...) }` can't be smart-cast directly,
+                // and stringResource's vararg formatArgs parameter is non-null (Any, not Any?).
+                val currentSelectedDay = selectedDay
                 val headerText = when {
-                    selectedDay != null -> "Birthdays on ${monthName.take(3)} $selectedDay"
-                    listBirthdays.isEmpty() -> "No birthdays in $monthName"
-                    else -> "Birthdays in $monthName (${listBirthdays.size})"
+                    currentSelectedDay != null -> stringResource(R.string.calendar_birthdays_on_day, monthName.take(3), currentSelectedDay)
+                    listBirthdays.isEmpty() -> stringResource(R.string.calendar_no_birthdays_in_month, monthName)
+                    else -> pluralStringResource(R.plurals.calendar_birthdays_in_month, listBirthdays.size, monthName, listBirthdays.size)
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -285,7 +293,7 @@ fun CalendarScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "No birthdays on this day",
+                                stringResource(R.string.calendar_no_birthdays_on_day),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.outline
                             )

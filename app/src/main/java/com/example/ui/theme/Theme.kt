@@ -1,17 +1,10 @@
 package com.example.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 
 data class NeumorphicShadows(
     val lightShadow: Color,
@@ -59,14 +52,12 @@ fun MyApplicationTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = DarkColorScheme
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-        }
-    }
+
+    // Status bar styling is NOT done here via window.statusBarColor — that setter is deprecated
+    // and silently ignored once targetSdk reaches 35 (edge-to-edge is enforced app-wide from
+    // API 35, and enableEdgeToEdge() is already called in MainActivity). The equivalent, working
+    // approach is to pass the intended SystemBarStyle to enableEdgeToEdge() itself, in
+    // MainActivity.onCreate, before setContent — see MainActivity.kt.
 
     val shadows = NeumorphicShadows(Color(0x26FFFFFF), Color(0x99000000))
 

@@ -22,7 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.NotificationScheduler
 import com.example.ui.components.NeumorphicButton
 import com.example.ui.components.NeumorphicIconButton
@@ -68,7 +70,7 @@ fun NotificationsSettingsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Notifications", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.notif_settings_title), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                 },
                 navigationIcon = {
                     NeumorphicIconButton(
@@ -76,7 +78,7 @@ fun NotificationsSettingsScreen(
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
                         cornerRadius = 20.dp
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.notif_settings_cd_back), tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -102,12 +104,12 @@ fun NotificationsSettingsScreen(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Reminder Health", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.notif_settings_health_heading), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 
                     if (!systemNotificationsGranted) {
                         PermissionStatusRow(
-                            title = "App Notifications",
-                            subtitle = "Blocked at the system level — reminders can't show at all",
+                            title = stringResource(R.string.notif_settings_perm_app_title),
+                            subtitle = stringResource(R.string.notif_settings_perm_app_subtitle),
                             onClick = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -122,8 +124,8 @@ fun NotificationsSettingsScreen(
                     }
                     if (!exactAlarmsGranted) {
                         PermissionStatusRow(
-                            title = "Exact Alarms",
-                            subtitle = "Without this, reminders may fire late or be dropped by the system",
+                            title = stringResource(R.string.notif_settings_perm_alarm_title),
+                            subtitle = stringResource(R.string.notif_settings_perm_alarm_subtitle),
                             onClick = { NotificationScheduler.requestExactAlarmPermission(context) }
                         )
                     }
@@ -154,8 +156,8 @@ fun NotificationsSettingsScreen(
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
-                            Text("Enable Notifications", style = MaterialTheme.typography.bodyLarge)
-                            Text("Turn all birthday alerts on or off", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.notif_settings_enable_all_title), style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.notif_settings_enable_all_subtitle), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     NeumorphicSwitch(
@@ -193,8 +195,8 @@ fun NotificationsSettingsScreen(
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column {
-                                    Text("Notification Sounds", style = MaterialTheme.typography.bodyLarge)
-                                    Text("Play sound for alerts", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(stringResource(R.string.notif_settings_sound_title), style = MaterialTheme.typography.bodyLarge)
+                                    Text(stringResource(R.string.notif_settings_sound_subtitle), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                             NeumorphicSwitch(
@@ -221,8 +223,8 @@ fun NotificationsSettingsScreen(
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column {
-                                    Text("Default Reminder", style = MaterialTheme.typography.bodyLarge)
-                                    Text("Used to pre-fill new birthdays", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(stringResource(R.string.notif_settings_default_reminder_title), style = MaterialTheme.typography.bodyLarge)
+                                    Text(stringResource(R.string.notif_settings_default_reminder_subtitle), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
 
@@ -289,7 +291,7 @@ private fun PermissionStatusRow(title: String, subtitle: String, onClick: () -> 
             shapeBackgroundColor = MaterialTheme.colorScheme.primary
         ) {
             Text(
-                "Enable",
+                stringResource(R.string.notif_settings_perm_enable_button),
                 color = MaterialTheme.colorScheme.onPrimary,
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.padding(horizontal = 16.dp)

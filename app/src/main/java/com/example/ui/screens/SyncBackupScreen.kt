@@ -10,8 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.ui.components.NeumorphicIconButton
 import com.example.ui.components.neumorphic
 
@@ -25,7 +27,7 @@ fun SyncBackupScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Sync & Backup",
+                        stringResource(R.string.sync_title),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -40,7 +42,7 @@ fun SyncBackupScreen(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.sync_cd_back),
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -86,7 +88,7 @@ fun SyncBackupScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "✨  Feature Coming Soon",
+                    stringResource(R.string.sync_coming_soon_badge),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -95,7 +97,7 @@ fun SyncBackupScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                "Cloud Sync & Backup",
+                stringResource(R.string.sync_heading),
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center
             )
@@ -103,7 +105,7 @@ fun SyncBackupScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                "We're working on secure cloud backup so your memories are always safe.\n\nThis feature will let you sync across devices and restore your birthday data anytime.",
+                stringResource(R.string.sync_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -130,12 +132,12 @@ fun SyncBackupScreen(
                         modifier = Modifier.size(28.dp)
                     )
                     Text(
-                        "Under Development",
+                        stringResource(R.string.sync_under_development),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.outline
                     )
                     Text(
-                        "Stay tuned for the next release of Glimmer!",
+                        stringResource(R.string.sync_stay_tuned),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outlineVariant,
                         textAlign = TextAlign.Center

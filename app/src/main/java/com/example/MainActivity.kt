@@ -5,9 +5,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
@@ -17,6 +19,7 @@ import com.example.data.NotificationScheduler
 import com.example.data.SettingsRepository
 import com.example.ui.GlimmerApp
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.surfaceDark
 import com.example.viewmodel.GlimmerViewModel
 import com.example.viewmodel.GlimmerViewModelFactory
 
@@ -37,7 +40,15 @@ class MainActivity : ComponentActivity() {
         // postSplashScreenTheme (Theme.MyApplication) once the first frame is ready.
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // window.statusBarColor (previously set from a SideEffect in MyApplicationTheme) is
+        // deprecated and silently ignored once targetSdk reaches 35, where edge-to-edge is
+        // enforced app-wide. Passing the style here — always-dark scrim, light icons, since
+        // Glimmer is dark-only — is the working equivalent for every API level this app supports.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(surfaceDark.toArgb()),
+            navigationBarStyle = SystemBarStyle.dark(surfaceDark.toArgb())
+        )
 
         // Create notification channels on startup
         NotificationScheduler.createNotificationChannel(this)

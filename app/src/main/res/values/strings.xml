@@ -1,3 +1,172 @@
 <resources>
     <string name="app_name">Glimmer</string>
+
+    <!-- Shared -->
+    <string name="common_ok">OK</string>
+    <string name="common_cancel">Cancel</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_add">Add</string>
+    <string name="nav_calendar">Calendar</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Home screen -->
+    <string name="home_cd_notifications">Notifications</string>
+    <string name="home_cd_profile">Profile</string>
+    <string name="home_cd_add_birthday">Add Birthday</string>
+    <string name="home_search_placeholder">Search friends, family…</string>
+    <string name="home_section_today">Today 🎉</string>
+    <string name="home_section_upcoming">Upcoming</string>
+    <string name="home_section_none_yet">No Birthdays Yet</string>
+    <string name="home_empty_title">No birthdays added yet</string>
+    <string name="home_empty_subtitle">Tap + to add your first one!</string>
+    <string name="home_reminder_warning_title">Reminders may not fire</string>
+    <string name="home_reminder_warning_subtitle">A permission Glimmer needs is turned off</string>
+    <string name="home_reminder_warning_fix">Fix</string>
+    <string name="home_cd_dismiss">Dismiss</string>
+    <string name="home_turning_today">Turning %1$d today! 🎂</string>
+    <string name="home_send_wish">View &amp; Send a Wish</string>
+    <string name="days_until_today">Today!</string>
+    <string name="days_until_tomorrow">Tomorrow</string>
+    <plurals name="days_until_n">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+
+    <!-- Add/Edit birthday form (shared between AddBirthdayScreen and EditBirthdayScreen) -->
+    <string name="field_label_name">Name</string>
+    <string name="field_error_name_required">Name is required</string>
+    <string name="field_placeholder_name">e.g., Alex Johnson</string>
+    <string name="field_label_dob">Date of Birth</string>
+    <string name="field_error_date_required">Please select a date</string>
+    <string name="field_placeholder_select_date">Select Date</string>
+    <string name="field_label_relationship">Relationship</string>
+    <string name="field_error_relationship_required">Please select a relationship</string>
+    <string name="field_placeholder_select_category">Select category</string>
+    <string name="field_label_phone">Phone Number (optional)</string>
+    <string name="field_placeholder_phone">e.g., (555) 123-4567</string>
+    <string name="field_label_notes">Notes (optional)</string>
+    <string name="field_placeholder_notes">Gift ideas, preferences…</string>
+    <string name="field_label_reminders">Reminders</string>
+    <string name="field_send_notification">Send Notification</string>
+    <string name="field_send_notification_subtitle">Get reminded in advance</string>
+    <string name="field_label_remind_me">Remind me</string>
+    <string name="field_placeholder_select_time">Select time</string>
+
+    <!-- Add screen -->
+    <string name="add_title">Add Birthday</string>
+    <string name="add_cd_back">Back</string>
+    <string name="add_cd_photo">Add Photo</string>
+    <string name="add_heading">New Birthday</string>
+    <string name="add_subheading">Who are we celebrating?</string>
+    <string name="add_save_button">Save Reminder</string>
+
+    <!-- Edit screen -->
+    <string name="edit_title">Edit Birthday</string>
+    <string name="edit_cd_back">Back</string>
+    <string name="edit_heading">Update Birthday</string>
+    <string name="edit_subheading">Edit %1$s\'s details</string>
+    <string name="edit_save_button">Update Reminder</string>
+
+    <!-- Birthday detail screen -->
+    <string name="detail_title">Birthday Detail</string>
+    <string name="detail_cd_back">Back</string>
+    <string name="detail_cd_edit">Edit</string>
+    <string name="detail_cd_delete">Delete</string>
+    <string name="detail_delete_dialog_title">Delete Birthday?</string>
+    <string name="detail_delete_dialog_message">Are you sure you want to remove %1$s\'s birthday? This action cannot be undone.</string>
+    <string name="detail_delete_dialog_fallback_name">this person</string>
+    <string name="detail_delete_confirm">Delete</string>
+    <string name="detail_delete_cancel">Cancel</string>
+    <string name="detail_action_message">Message</string>
+    <string name="detail_action_call">Call</string>
+    <string name="detail_action_gift">Gift</string>
+    <string name="detail_snackbar_no_sms_app">No messaging app found</string>
+    <string name="detail_snackbar_no_dialer_app">No dialer app found</string>
+    <string name="detail_snackbar_no_browser">No browser found</string>
+    <string name="detail_details_heading">Details</string>
+    <string name="detail_label_full_name">Full Name</string>
+    <string name="detail_label_dob">Date of Birth</string>
+    <string name="detail_label_relationship">Relationship</string>
+    <string name="detail_label_phone">Phone</string>
+    <string name="detail_label_reminder">Reminder</string>
+    <string name="detail_reminder_off">Off</string>
+    <string name="detail_label_notes">Notes</string>
+    <string name="detail_turning_on">Turning %1$d on %2$s</string>
+    <string name="detail_days_today">Today! 🎉</string>
+    <plurals name="detail_days_away">
+        <item quantity="one">%d Day Away</item>
+        <item quantity="other">%d Days Away</item>
+    </plurals>
+    <string name="detail_sms_body">Happy Birthday %1$s! 🎂🎉</string>
+
+    <!-- Calendar screen -->
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_cd_previous">Previous</string>
+    <string name="calendar_cd_next">Next</string>
+    <string name="calendar_birthdays_on_day">Birthdays on %1$s %2$d</string>
+    <string name="calendar_no_birthdays_in_month">No birthdays in %1$s</string>
+    <string name="calendar_no_birthdays_on_day">No birthdays on this day</string>
+    <plurals name="calendar_birthdays_in_month">
+        <item quantity="one">Birthday in %1$s (%2$d)</item>
+        <item quantity="other">Birthdays in %1$s (%2$d)</item>
+    </plurals>
+    <string-array name="calendar_weekday_abbreviations">
+        <item>Su</item>
+        <item>Mo</item>
+        <item>Tu</item>
+        <item>We</item>
+        <item>Th</item>
+        <item>Fr</item>
+        <item>Sa</item>
+    </string-array>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_cd_edit_profile">Edit Profile</string>
+    <string name="settings_default_name">Your Name</string>
+    <string name="settings_default_email">your@email.com</string>
+    <string name="settings_category_account">ACCOUNT</string>
+    <string name="settings_item_user_profile">User Profile</string>
+    <string name="settings_item_sync_backup">Sync &amp; Backup</string>
+    <string name="settings_category_preferences">PREFERENCES</string>
+    <string name="settings_item_notifications">Notifications</string>
+    <string name="settings_item_notifications_subtitle">Time of day, sounds</string>
+
+    <!-- Notifications settings screen -->
+    <string name="notif_settings_title">Notifications</string>
+    <string name="notif_settings_cd_back">Back</string>
+    <string name="notif_settings_health_heading">Reminder Health</string>
+    <string name="notif_settings_perm_app_title">App Notifications</string>
+    <string name="notif_settings_perm_app_subtitle">Blocked at the system level — reminders can\'t show at all</string>
+    <string name="notif_settings_perm_alarm_title">Exact Alarms</string>
+    <string name="notif_settings_perm_alarm_subtitle">Without this, reminders may fire late or be dropped by the system</string>
+    <string name="notif_settings_perm_enable_button">Enable</string>
+    <string name="notif_settings_enable_all_title">Enable Notifications</string>
+    <string name="notif_settings_enable_all_subtitle">Turn all birthday alerts on or off</string>
+    <string name="notif_settings_sound_title">Notification Sounds</string>
+    <string name="notif_settings_sound_subtitle">Play sound for alerts</string>
+    <string name="notif_settings_default_reminder_title">Default Reminder</string>
+    <string name="notif_settings_default_reminder_subtitle">Used to pre-fill new birthdays</string>
+
+    <!-- Profile settings screen -->
+    <string name="profile_title">User Profile</string>
+    <string name="profile_cd_back">Back</string>
+    <string name="profile_personal_details">Personal Details</string>
+    <string name="profile_label_display_name">Display Name</string>
+    <string name="profile_placeholder_name">Your name</string>
+    <string name="profile_label_email">Email</string>
+    <string name="profile_placeholder_email">your@email.com</string>
+    <string name="profile_save_button">Save Profile</string>
+    <string name="profile_saved_snackbar">Profile saved!</string>
+
+    <!-- Sync & backup screen -->
+    <string name="sync_title">Sync &amp; Backup</string>
+    <string name="sync_cd_back">Back</string>
+    <string name="sync_coming_soon_badge">✨  Feature Coming Soon</string>
+    <string name="sync_heading">Cloud Sync &amp; Backup</string>
+    <string name="sync_description">We\'re working on secure cloud backup so your memories are always safe.\n\nThis feature will let you sync across devices and restore your birthday data anytime.</string>
+    <string name="sync_under_development">Under Development</string>
+    <string name="sync_stay_tuned">Stay tuned for the next release of Glimmer!</string>
 </resources>

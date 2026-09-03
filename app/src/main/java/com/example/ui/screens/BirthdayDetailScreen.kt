@@ -23,8 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.birthLocalDate
 import com.example.data.birthMonthDay
 import com.example.ui.components.NeumorphicButton
@@ -59,11 +62,14 @@ fun BirthdayDetailScreen(
             onDismissRequest = { showDeleteDialog = false },
             containerColor = MaterialTheme.colorScheme.surface,
             title = {
-                Text("Delete Birthday?", style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.detail_delete_dialog_title), style = MaterialTheme.typography.headlineMedium)
             },
             text = {
                 Text(
-                    "Are you sure you want to remove ${birthday?.name ?: "this person"}'s birthday? This action cannot be undone.",
+                    stringResource(
+                        R.string.detail_delete_dialog_message,
+                        birthday?.name ?: stringResource(R.string.detail_delete_dialog_fallback_name)
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -79,7 +85,7 @@ fun BirthdayDetailScreen(
                     cornerRadius = 10.dp,
                     shapeBackgroundColor = MaterialTheme.colorScheme.errorContainer
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(stringResource(R.string.detail_delete_confirm), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
                 }
             },
             dismissButton = {
@@ -88,7 +94,7 @@ fun BirthdayDetailScreen(
                     modifier = Modifier.height(44.dp),
                     cornerRadius = 10.dp
                 ) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(stringResource(R.string.detail_delete_cancel), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         )
@@ -107,9 +113,9 @@ fun BirthdayDetailScreen(
     val age = ageOnNextBirthday(birthday)
 
     val daysLabel = when (daysLeft) {
-        0 -> "Today! 🎉"
-        1 -> "Tomorrow"
-        else -> "$daysLeft Days Away"
+        0 -> stringResource(R.string.detail_days_today)
+        1 -> stringResource(R.string.days_until_tomorrow)
+        else -> pluralStringResource(R.plurals.detail_days_away, daysLeft, daysLeft)
     }
     val birthdateStr = "${monthDay.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${monthDay.dayOfMonth}"
 
@@ -118,7 +124,7 @@ fun BirthdayDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Birthday Detail",
+                        stringResource(R.string.detail_title),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -129,7 +135,7 @@ fun BirthdayDetailScreen(
                         modifier = Modifier.padding(start = 8.dp).size(40.dp),
                         cornerRadius = 20.dp
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_cd_back), tint = MaterialTheme.colorScheme.primary)
                     }
                 },
                 actions = {
@@ -138,7 +144,7 @@ fun BirthdayDetailScreen(
                         modifier = Modifier.size(40.dp),
                         cornerRadius = 20.dp
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.detail_cd_edit), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     NeumorphicIconButton(
@@ -146,7 +152,7 @@ fun BirthdayDetailScreen(
                         modifier = Modifier.padding(end = 12.dp).size(40.dp),
                         cornerRadius = 20.dp
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.detail_cd_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -178,7 +184,7 @@ fun BirthdayDetailScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Text(birthday.name, style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onSurface)
             Text(
-                "Turning $age on $birthdateStr",
+                stringResource(R.string.detail_turning_on, age, birthdateStr),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -215,9 +221,14 @@ fun BirthdayDetailScreen(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                val smsBody = stringResource(R.string.detail_sms_body, birthday.name)
+                val noSmsAppMessage = stringResource(R.string.detail_snackbar_no_sms_app)
+                val noDialerAppMessage = stringResource(R.string.detail_snackbar_no_dialer_app)
+                val noBrowserMessage = stringResource(R.string.detail_snackbar_no_browser)
+
                 ActionButton(
                     icon = Icons.Default.ChatBubble,
-                    label = "Message",
+                    label = stringResource(R.string.detail_action_message),
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.primary,
                     bgColor = MaterialTheme.colorScheme.surface,
@@ -231,16 +242,16 @@ fun BirthdayDetailScreen(
                         } else {
                             Intent(Intent.ACTION_VIEW, Uri.parse("sms:"))
                         }.apply {
-                            putExtra("sms_body", "Happy Birthday ${birthday.name}! 🎂🎉")
+                            putExtra("sms_body", smsBody)
                         }
                         context.safeStartActivity(smsIntent) {
-                            coroutineScope.launch { snackbarHostState.showSnackbar("No messaging app found") }
+                            coroutineScope.launch { snackbarHostState.showSnackbar(noSmsAppMessage) }
                         }
                     }
                 )
                 ActionButton(
                     icon = Icons.Default.Call,
-                    label = "Call",
+                    label = stringResource(R.string.detail_action_call),
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.tertiary,
                     bgColor = MaterialTheme.colorScheme.surface,
@@ -252,13 +263,13 @@ fun BirthdayDetailScreen(
                             Intent(Intent.ACTION_DIAL)
                         }
                         context.safeStartActivity(dialIntent) {
-                            coroutineScope.launch { snackbarHostState.showSnackbar("No dialer app found") }
+                            coroutineScope.launch { snackbarHostState.showSnackbar(noDialerAppMessage) }
                         }
                     }
                 )
                 ActionButton(
                     icon = Icons.Default.Redeem,
-                    label = "Gift",
+                    label = stringResource(R.string.detail_action_gift),
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.onPrimary,
                     bgColor = MaterialTheme.colorScheme.primary,
@@ -266,7 +277,7 @@ fun BirthdayDetailScreen(
                         val searchIntent = Intent(Intent.ACTION_VIEW,
                             Uri.parse("https://www.google.com/search?q=birthday+gift+ideas+for+${Uri.encode(birthday.relationship.lowercase())}"))
                         context.safeStartActivity(searchIntent) {
-                            coroutineScope.launch { snackbarHostState.showSnackbar("No browser found") }
+                            coroutineScope.launch { snackbarHostState.showSnackbar(noBrowserMessage) }
                         }
                     }
                 )
@@ -283,17 +294,17 @@ fun BirthdayDetailScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Details", style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.detail_details_heading), style = MaterialTheme.typography.headlineMedium)
 
-                DetailRow(label = "Full Name", value = birthday.name)
-                DetailRow(label = "Date of Birth", value = fullDateFormat.format(birthday.birthLocalDate()))
-                DetailRow(label = "Relationship", value = birthday.relationship)
+                DetailRow(label = stringResource(R.string.detail_label_full_name), value = birthday.name)
+                DetailRow(label = stringResource(R.string.detail_label_dob), value = fullDateFormat.format(birthday.birthLocalDate()))
+                DetailRow(label = stringResource(R.string.detail_label_relationship), value = birthday.relationship)
                 if (!birthday.phoneNumber.isNullOrBlank()) {
-                    DetailRow(label = "Phone", value = birthday.phoneNumber)
+                    DetailRow(label = stringResource(R.string.detail_label_phone), value = birthday.phoneNumber)
                 }
-                DetailRow(label = "Reminder", value = if (birthday.reminderEnabled) birthday.reminderTime else "Off")
+                DetailRow(label = stringResource(R.string.detail_label_reminder), value = if (birthday.reminderEnabled) birthday.reminderTime else stringResource(R.string.detail_reminder_off))
                 if (!birthday.notes.isNullOrBlank()) {
-                    DetailRow(label = "Notes", value = birthday.notes)
+                    DetailRow(label = stringResource(R.string.detail_label_notes), value = birthday.notes)
                 }
             }
 
