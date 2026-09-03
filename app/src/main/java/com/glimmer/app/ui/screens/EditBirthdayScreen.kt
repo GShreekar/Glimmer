@@ -17,8 +17,6 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Contacts
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Notifications
@@ -139,8 +137,6 @@ fun EditBirthdayScreen(
     }
 
     var relationship by remember(birthday.id) { mutableStateOf(birthday.relationship) }
-    var showRelationshipDropdown by remember { mutableStateOf(false) }
-    val relationships = listOf("Family", "Friend", "Partner", "Colleague", "Other")
 
     // FEAT-04: seeded once from whatever this person's reminders actually were (remember(id),
     // same reasoning as every other field above — a background re-emission of `reminders` must
@@ -283,36 +279,17 @@ fun EditBirthdayScreen(
                     }
                 }
 
+                // FEAT-08: free text now, with the old 5 presets as suggestion chips — see
+                // AddBirthdayScreen.
                 FormEntry(label = stringResource(R.string.field_label_relationship)) {
-                    ExposedDropdownMenuBox(
-                        expanded = showRelationshipDropdown,
-                        onExpandedChange = { showRelationshipDropdown = it }
-                    ) {
-                        NeumorphicTextField(
-                            value = relationship,
-                            onValueChange = {},
-                            placeholder = stringResource(R.string.field_placeholder_select_category),
-                            icon = Icons.Default.Group,
-                            trailingIcon = if (showRelationshipDropdown) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            readOnly = true,
-                            onClick = { showRelationshipDropdown = true },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showRelationshipDropdown,
-                            onDismissRequest = { showRelationshipDropdown = false }
-                        ) {
-                            relationships.forEach { rel ->
-                                DropdownMenuItem(
-                                    text = { Text(rel) },
-                                    onClick = {
-                                        relationship = rel
-                                        showRelationshipDropdown = false
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    NeumorphicTextField(
+                        value = relationship,
+                        onValueChange = { relationship = it },
+                        placeholder = stringResource(R.string.field_placeholder_select_category),
+                        icon = Icons.Default.Group
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    RelationshipSuggestions(onSelect = { relationship = it })
                 }
 
                 FormEntry(label = stringResource(R.string.field_label_phone)) {

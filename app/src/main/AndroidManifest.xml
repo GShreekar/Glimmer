@@ -25,6 +25,16 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <!--
+      FEAT-11: lets onboarding's reliability step offer exempting Glimmer from battery
+      optimization on OEMs known for aggressively killing background work (Xiaomi, Oppo, Vivo,
+      Samsung) — without it, ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS throws a SecurityException
+      rather than showing the system dialog. Purely opt-in and user-initiated, same as
+      SCHEDULE_EXACT_ALARM above; if this app is ever distributed on Play, its listing needs to
+      declare this permission's use case under the Battery Optimization policy.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!--
       SEC-01: the README promises "100% Offline & Private", but the default (allowBackup=true
       with no rules) is "back everything up" — Android Auto Backup would silently upload the
       entire Room database (every contact's name, birth date, relationship, private notes) to the
@@ -81,6 +91,18 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
+        </receiver>
+
+        <!-- FEAT-06: the home-screen widget — see widget/BirthdayWidget.kt. -->
+        <receiver
+            android:name="com.glimmer.app.widget.BirthdayWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/birthday_widget_info" />
         </receiver>
     </application>
 

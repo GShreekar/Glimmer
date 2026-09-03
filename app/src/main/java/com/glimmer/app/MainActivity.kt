@@ -23,7 +23,9 @@ import com.glimmer.app.ui.theme.MyApplicationTheme
 import com.glimmer.app.ui.theme.surfaceDark
 import com.glimmer.app.viewmodel.GlimmerViewModel
 import com.glimmer.app.viewmodel.GlimmerViewModelFactory
+import com.glimmer.app.widget.WidgetScheduler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -67,15 +69,10 @@ class MainActivity : ComponentActivity() {
         // Create notification channels on startup
         NotificationScheduler.createNotificationChannel(this)
 
-        // Prime the notification permission once, at first launch, rather than from a save
-        // button deep in a form. The Home screen banner (see HomeScreen) covers the case where
-        // the user denies it here or revokes it later.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        // FEAT-06: KEEP means this is a no-op on every launch after the first — WorkManager
+        // persists the schedule itself (including across reboots), so this doesn't need to be
+        // re-enqueued on every app open, only guaranteed to have been enqueued at least once.
+        WidgetScheduler.schedulePeriodicUpdates(this)
 
         lifecycleScope.launch {
             val database = withContext(Dispatchers.IO) { AppDatabase.getDatabase(this@MainActivity) }
@@ -84,10 +81,37 @@ class MainActivity : ComponentActivity() {
             val factory = GlimmerViewModelFactory(application, repository, settingsRepository)
             val viewModel = ViewModelProvider(this@MainActivity, factory)[GlimmerViewModel::class.java]
 
+            // FEAT-11: onboarding is for a genuinely fresh install — gated on the stored flag
+            // AND on having no birthdays yet, so an existing install upgrading into this version
+            // (whose flag defaults to false, having never been set) doesn't get sent through
+            // onboarding again just because it predates the flag. A user who reaches this point
+            // with data already in place is marked as onboarded immediately, so this check is
+            // only ever the DB read once, not on every future launch too.
+            val hasCompletedOnboarding = settingsRepository.hasCompletedOnboarding.first()
+            val hasAnyBirthdays = repository.allBirthdays.first().isNotEmpty()
+            val startAtOnboarding = !hasCompletedOnboarding && !hasAnyBirthdays
+            if (!hasCompletedOnboarding && hasAnyBirthdays) {
+                settingsRepository.setHasCompletedOnboarding(true)
+            }
+
+            // Prime the notification permission once, at first launch, rather than from a save
+            // button deep in a form. Skipped when onboarding is about to run — its own
+            // Reliability page requests this with actual context instead of an unexplained
+            // system dialog appearing before the user has even seen what the app does. The Home
+            // screen banner (see HomeScreen) covers the case where the user denies it either way,
+            // or revokes it later.
+            if (!startAtOnboarding &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+
             isDataReady = true
             setContent {
                 MyApplicationTheme {
-                    GlimmerApp(viewModel)
+                    GlimmerApp(viewModel, startAtOnboarding = startAtOnboarding)
                 }
             }
         }

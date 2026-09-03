@@ -35,6 +35,8 @@ class BirthdayRepository(
     suspend fun setReminders(birthdayId: Int, daysBeforeList: List<Int>) =
         reminderDao.replaceReminders(birthdayId, daysBeforeList)
 
+    suspend fun setFavorite(id: Int, isFavorite: Boolean) = birthdayDao.setFavorite(id, isFavorite)
+
     // This is the ONLY path birthdays are written through (insert/update above), so it's the one
     // place that needs to keep monthDayKey in sync with dateOfBirth — callers building a
     // Birthday(...) never need to think about it.

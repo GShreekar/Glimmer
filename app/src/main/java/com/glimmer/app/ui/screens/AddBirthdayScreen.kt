@@ -18,8 +18,6 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Contacts
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Notifications
@@ -119,8 +117,6 @@ fun AddBirthdayScreen(
     }
 
     var relationship by remember { mutableStateOf("") }
-    var showRelationshipDropdown by remember { mutableStateOf(false) }
-    val relationships = listOf("Family", "Friend", "Partner", "Colleague", "Other")
 
     // FEAT-04: a person can have several reminders now — seeded from the app-wide default set in
     // Notifications settings, same starting point the old single-select dropdown used.
@@ -269,37 +265,18 @@ fun AddBirthdayScreen(
                     }
                 }
 
+                // FEAT-08: was a read-only dropdown locked to 5 presets — "Mum", "Cousin", "Gym
+                // buddy" don't map onto Family/Friend/Partner/Colleague/Other. The field is free
+                // text now; the presets remain as one-tap suggestion chips underneath.
                 FormEntry(label = stringResource(R.string.field_label_relationship), error = if (relationshipError) stringResource(R.string.field_error_relationship_required) else null) {
-                    ExposedDropdownMenuBox(
-                        expanded = showRelationshipDropdown,
-                        onExpandedChange = { showRelationshipDropdown = it }
-                    ) {
-                        NeumorphicTextField(
-                            value = relationship,
-                            onValueChange = {},
-                            placeholder = stringResource(R.string.field_placeholder_select_category),
-                            icon = Icons.Default.Group,
-                            trailingIcon = if (showRelationshipDropdown) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            readOnly = true,
-                            onClick = { showRelationshipDropdown = true },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showRelationshipDropdown,
-                            onDismissRequest = { showRelationshipDropdown = false }
-                        ) {
-                            relationships.forEach { rel ->
-                                DropdownMenuItem(
-                                    text = { Text(rel) },
-                                    onClick = {
-                                        relationship = rel
-                                        relationshipError = false
-                                        showRelationshipDropdown = false
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    NeumorphicTextField(
+                        value = relationship,
+                        onValueChange = { relationship = it; relationshipError = false },
+                        placeholder = stringResource(R.string.field_placeholder_select_category),
+                        icon = Icons.Default.Group
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    RelationshipSuggestions(onSelect = { relationship = it; relationshipError = false })
                 }
 
                 // Phone number — powers the Message/Call quick actions on the Detail screen and
@@ -485,6 +462,21 @@ fun ReminderOffsetSelector(selected: Set<Int>, onToggle: (Int) -> Unit) {
                 onClick = { onToggle(days) },
                 label = { Text(label) }
             )
+        }
+    }
+}
+
+/** FEAT-08: the old fixed dropdown's 5 options, now one-tap suggestions for a free-text field. */
+val RelationshipPresets = listOf("Family", "Friend", "Partner", "Colleague", "Other")
+
+@Composable
+fun RelationshipSuggestions(onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        RelationshipPresets.forEach { preset ->
+            AssistChip(onClick = { onSelect(preset) }, label = { Text(preset) })
         }
     }
 }

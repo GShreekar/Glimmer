@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -28,7 +29,8 @@ fun SettingsScreen(
     viewModel: GlimmerViewModel,
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
-    onNavigateToSync: () -> Unit = {}
+    onNavigateToSync: () -> Unit = {},
+    onNavigateToWishTemplates: () -> Unit = {}
 ) {
     // Both driven by the same ViewModel/DataStore-backed StateFlow that ProfileSettingsScreen
     // writes to, so this screen updates the moment a name/email is saved there — no restart
@@ -120,6 +122,13 @@ fun SettingsScreen(
                     iconColor = MaterialTheme.colorScheme.secondary,
                     subtitle = stringResource(R.string.settings_item_notifications_subtitle),
                     onClick = onNavigateToNotifications
+                )
+                SettingsItem(
+                    title = stringResource(R.string.settings_item_wish_templates),
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    iconColor = MaterialTheme.colorScheme.secondary,
+                    subtitle = stringResource(R.string.settings_item_wish_templates_subtitle),
+                    onClick = onNavigateToWishTemplates
                 )
             }
         }

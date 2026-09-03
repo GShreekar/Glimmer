@@ -13,7 +13,9 @@ import com.glimmer.app.data.NotificationScheduler
 import com.glimmer.app.data.PhotoStorage
 import com.glimmer.app.data.Reminder
 import com.glimmer.app.data.SettingsRepository
+import com.glimmer.app.data.WishTemplates
 import com.glimmer.app.data.birthMonthDay
+import com.glimmer.app.widget.WidgetScheduler
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Duration
@@ -68,6 +71,16 @@ class GlimmerViewModel(
     // Search query state
     val searchQuery = MutableStateFlow("")
 
+    // FEAT-12: null = no filter (show every relationship). Same "expose the MutableStateFlow
+    // directly, UI writes .value" pattern as searchQuery above.
+    val relationshipFilter = MutableStateFlow<String?>(null)
+    val sortMode = MutableStateFlow(HomeSortMode.DATE)
+
+    /** The distinct relationships currently in use, for Home's filter chip row. */
+    val availableRelationships: StateFlow<List<String>> = allBirthdays
+        .map { list -> list.map { it.relationship }.filter { it.isNotBlank() }.distinct().sorted() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Ticks once immediately and then again at every local-midnight rollover, so a countdown
     // ("3 days" -> "2 days") and the today/upcoming split update on their own if the app is left
     // open overnight — previously they only ever refreshed when the process restarted (PERF-02).
@@ -100,17 +113,48 @@ class GlimmerViewModel(
     // composable body — recomputed on every recomposition (a keystroke in the search box, the
     // reminder-warning banner being dismissed, …), not just when the underlying data changed.
     // This is now a single derived StateFlow the screen just renders.
-    val homeUiState: StateFlow<HomeUiState> = combine(filteredBirthdays, dayTicker) { birthdays, today ->
-        val items = birthdays.map { BirthdayUi(it, daysUntilBirthday(it, today), ageOnNextBirthday(it, today)) }
+    //
+    // FEAT-12: also where the flat "Upcoming" list becomes This Week/This Month/Later, and where
+    // favorites get pulled out to their own section — a flat list stopped being scannable once
+    // there were 60+ people in it. A favorited person whose birthday ISN'T today shows in
+    // Favorites, not also in one of the time buckets; today's birthdays always stay in Today
+    // regardless of favorite status, since "it's happening right now" outranks the pin.
+    val homeUiState: StateFlow<HomeUiState> = combine(
+        filteredBirthdays, dayTicker, relationshipFilter, sortMode
+    ) { birthdays, today, filter, sort ->
+        val relevant = if (filter == null) birthdays else birthdays.filter { it.relationship == filter }
+        val items = relevant.map { BirthdayUi(it, daysUntilBirthday(it, today), ageOnNextBirthday(it, today)) }
+
+        val todayItems = items.filter { it.daysUntil == 0 }
+        val upcoming = items.filter { it.daysUntil > 0 }
+        val favoriteItems = upcoming.filter { it.birthday.isFavorite }
+        val remaining = upcoming.filterNot { it.birthday.isFavorite }
+
         HomeUiState(
-            today = items.filter { it.daysUntil == 0 },
-            upcoming = items.filter { it.daysUntil > 0 }
+            favorites = favoriteItems.sortedFor(sort),
+            today = todayItems.sortedFor(sort),
+            thisWeek = remaining.filter { it.daysUntil <= 7 }.sortedFor(sort),
+            thisMonth = remaining.filter { it.daysUntil in 8..30 }.sortedFor(sort),
+            later = remaining.filter { it.daysUntil > 30 }.sortedFor(sort)
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = HomeUiState()
     )
+
+    fun toggleFavorite(id: Int) {
+        viewModelScope.launch(viewModelExceptionHandler) {
+            val isFavorite = allBirthdays.value.firstOrNull { it.id == id }?.isFavorite ?: return@launch
+            repository.setFavorite(id, !isFavorite)
+            refreshWidget()
+        }
+    }
+
+    /** FEAT-06: the review's own "updateAppWidgetOnDataChange" — called after every write below. */
+    private fun refreshWidget() {
+        WidgetScheduler.requestImmediateUpdate(getApplication())
+    }
 
     // ── Global notification settings (backed by SettingsRepository/DataStore) ─────────────
     // NotificationsSettingsScreen used to write these to a SharedPreferences file that nothing
@@ -136,6 +180,22 @@ class GlimmerViewModel(
     // be readable on a locked screen unless the user opts in.
     val showOnLockScreen: StateFlow<Boolean> = settingsRepository.showOnLockScreen
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // FEAT-08
+    val wishTemplates: StateFlow<WishTemplates> = settingsRepository.wishTemplates
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WishTemplates())
+
+    fun setWishTemplates(value: WishTemplates) {
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setWishTemplates(value) }
+    }
+
+    // FEAT-11
+    val hasCompletedOnboarding: StateFlow<Boolean> = settingsRepository.hasCompletedOnboarding
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true) // see MainActivity: the real initial value is read before this StateFlow's default would ever be seen
+
+    fun setHasCompletedOnboarding(completed: Boolean) {
+        viewModelScope.launch(viewModelExceptionHandler) { settingsRepository.setHasCompletedOnboarding(completed) }
+    }
 
     fun setNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch(viewModelExceptionHandler) {
@@ -233,6 +293,7 @@ class GlimmerViewModel(
             val newId = repository.insert(birthday).toInt()
             repository.setReminders(newId, reminderOffsets.toList())
             scheduleNotification(birthday.copy(id = newId))
+            refreshWidget()
         }
     }
 
@@ -241,6 +302,7 @@ class GlimmerViewModel(
             repository.update(birthday)
             repository.setReminders(birthday.id, reminderOffsets.toList())
             scheduleNotification(birthday)
+            refreshWidget()
         }
     }
 
@@ -261,7 +323,10 @@ class GlimmerViewModel(
         // ImportContactsScreen navigates back the moment this returns, tearing down its own
         // SnackbarHost — the confirmation goes out on the same shared channel Add/Edit's failure
         // events use, which HomeScreen (still around after the navigation) renders as a snackbar.
-        if (imported > 0) _events.tryEmit(UiEvent.ImportSuccess(imported))
+        if (imported > 0) {
+            _events.tryEmit(UiEvent.ImportSuccess(imported))
+            refreshWidget()
+        }
         return imported
     }
 
@@ -290,6 +355,7 @@ class GlimmerViewModel(
             NotificationScheduler.cancelAllReminders(getApplication(), id)
             repository.deleteById(id) // reminders row cascade-deletes with it
             birthday?.let { _deleteEvents.emit(it.name) }
+            refreshWidget()
         }
     }
 
@@ -363,12 +429,31 @@ data class BirthdayUi(
     val daysUntil: Int,
     // FEAT-05: null when the birth year isn't known — HomeScreen hides "Turning N" for these.
     val ageTurning: Int?
-)
+) {
+    // FEAT-12: 18/21 (the two that matter before the decade pattern kicks in) plus every round
+    // decade — "these are the ones worth planning for," per the review's own reasoning for why
+    // this exists alongside the "week before" reminder offset.
+    val isMilestone: Boolean get() = ageTurning != null && (ageTurning == 18 || ageTurning == 21 || ageTurning % 10 == 0)
+}
 
+/** FEAT-12: Home's flat "Upcoming" list split into scannable sections. */
 data class HomeUiState(
+    val favorites: List<BirthdayUi> = emptyList(),
     val today: List<BirthdayUi> = emptyList(),
-    val upcoming: List<BirthdayUi> = emptyList()
-)
+    val thisWeek: List<BirthdayUi> = emptyList(),
+    val thisMonth: List<BirthdayUi> = emptyList(),
+    val later: List<BirthdayUi> = emptyList()
+) {
+    val isEmpty: Boolean get() = favorites.isEmpty() && today.isEmpty() && thisWeek.isEmpty() && thisMonth.isEmpty() && later.isEmpty()
+}
+
+enum class HomeSortMode { DATE, NAME }
+
+/** Within a section, DATE keeps the natural next-occurrence order the section was built in. */
+private fun List<BirthdayUi>.sortedFor(mode: HomeSortMode): List<BirthdayUi> = when (mode) {
+    HomeSortMode.DATE -> this
+    HomeSortMode.NAME -> sortedBy { it.birthday.name.lowercase() }
+}
 
 /**
  * Returns how many days until the next occurrence of this birthday (0 = today).

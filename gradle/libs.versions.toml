@@ -44,6 +44,8 @@ credentials = "1.5.0"
 googleid = "1.1.1"
 sqlcipherAndroid = "4.5.4"
 androidxSecurityCrypto = "1.1.0-alpha06"
+glance = "1.1.1"
+workManager = "2.10.1"
 
 
 [libraries]
@@ -103,6 +105,9 @@ androidx-credentials-play-services = { group = "androidx.credentials", name = "c
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 sqlcipher-android = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipherAndroid" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "androidxSecurityCrypto" }
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
+androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 
 
 [plugins]

@@ -108,6 +108,10 @@ dependencies {
   implementation(libs.androidx.security.crypto)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
+  // FEAT-06: the home-screen widget (Glance) and the worker that keeps it updated (WorkManager).
+  implementation(libs.androidx.glance.appwidget)
+  implementation(libs.androidx.glance.material3)
+  implementation(libs.androidx.work.runtime.ktx)
 
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)

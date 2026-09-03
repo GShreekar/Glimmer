@@ -2,18 +2,27 @@ package com.glimmer.app.ui.screens
 
 import java.time.format.TextStyle
 import java.util.Locale
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.stickyHeader
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import com.glimmer.app.R
 import com.glimmer.app.data.birthMonthDay
 import com.glimmer.app.ui.components.BirthdayAvatar
@@ -34,6 +44,7 @@ import com.glimmer.app.ui.components.rememberExactAlarmPermissionState
 import com.glimmer.app.ui.components.rememberNotificationsPermissionState
 import com.glimmer.app.viewmodel.BirthdayUi
 import com.glimmer.app.viewmodel.GlimmerViewModel
+import com.glimmer.app.viewmodel.HomeSortMode
 import com.glimmer.app.viewmodel.UiEvent
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +63,12 @@ fun HomeScreen(
     // delete-undo snackbar appearing, none of that used to be free.
     val uiState by viewModel.homeUiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    // FEAT-12: filter chips + sort toggle. Collected here (not inside a LazyColumn item {} block)
+    // because LazyListScope's builder isn't itself a @Composable context — only item {}/items {}
+    // bodies are, so collectAsState has to happen up here regardless of where it's rendered.
+    val availableRelationships by viewModel.availableRelationships.collectAsState()
+    val relationshipFilter by viewModel.relationshipFilter.collectAsState()
+    val sortMode by viewModel.sortMode.collectAsState()
 
     // Reflects the REAL, current system permission state (unlike a stored preference, these can
     // change outside the app — e.g. the user revokes notifications from system Settings) so the
@@ -221,6 +238,22 @@ fun HomeScreen(
                 }
             }
 
+            // FEAT-12: relationship filter chips + date/name sort toggle — only worth showing
+            // once there's more than one relationship in play at all.
+            if (availableRelationships.size > 1) {
+                item {
+                    FilterAndSortRow(
+                        relationships = availableRelationships,
+                        selectedFilter = relationshipFilter,
+                        onFilterChange = { viewModel.relationshipFilter.value = it },
+                        sortMode = sortMode,
+                        onToggleSort = {
+                            viewModel.sortMode.value = if (sortMode == HomeSortMode.DATE) HomeSortMode.NAME else HomeSortMode.DATE
+                        }
+                    )
+                }
+            }
+
             // ── Today's Birthdays ─────────────────────────────────────────
             if (uiState.today.isNotEmpty()) {
                 item {
@@ -236,23 +269,48 @@ fun HomeScreen(
                 }
 
                 items(uiState.today, key = { it.birthday.id }) { item ->
-                    TodayBirthdayCard(item = item, onClick = { onNavigateToDetail(item.birthday.id) })
+                    TodayBirthdayCard(
+                        item = item,
+                        onClick = { onNavigateToDetail(item.birthday.id) },
+                        onToggleFavorite = { viewModel.toggleFavorite(item.birthday.id) }
+                    )
                 }
             }
 
-            // ── Upcoming Birthdays ────────────────────────────────────────
-            item {
-                Text(
-                    if (uiState.upcoming.isEmpty() && uiState.today.isEmpty())
-                        stringResource(R.string.home_section_none_yet)
-                    else
-                        stringResource(R.string.home_section_upcoming),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // ── Favorites ───────────────────────────────────────────────────
+            if (uiState.favorites.isNotEmpty()) {
+                item { HomeSectionHeader(stringResource(R.string.home_section_favorites)) }
+                items(uiState.favorites, key = { it.birthday.id }) { item ->
+                    UpcomingBirthdayCard(
+                        item = item,
+                        onClick = { onNavigateToDetail(item.birthday.id) },
+                        onToggleFavorite = { viewModel.toggleFavorite(item.birthday.id) }
+                    )
+                }
             }
 
-            if (uiState.upcoming.isEmpty() && uiState.today.isEmpty()) {
+            // ── This Week / This Month / Later — FEAT-12's sticky-header grouping ──
+            homeSection(
+                titleRes = R.string.home_section_this_week,
+                items = uiState.thisWeek,
+                onNavigateToDetail = onNavigateToDetail,
+                onToggleFavorite = { viewModel.toggleFavorite(it) }
+            )
+            homeSection(
+                titleRes = R.string.home_section_this_month,
+                items = uiState.thisMonth,
+                onNavigateToDetail = onNavigateToDetail,
+                onToggleFavorite = { viewModel.toggleFavorite(it) }
+            )
+            homeSection(
+                titleRes = R.string.home_section_later,
+                items = uiState.later,
+                onNavigateToDetail = onNavigateToDetail,
+                onToggleFavorite = { viewModel.toggleFavorite(it) }
+            )
+
+            if (uiState.isEmpty) {
+                item { HomeSectionHeader(stringResource(R.string.home_section_none_yet)) }
                 item {
                     Box(
                         modifier = Modifier
@@ -272,10 +330,6 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-            } else {
-                items(uiState.upcoming, key = { it.birthday.id }) { item ->
-                    UpcomingBirthdayCard(item = item, onClick = { onNavigateToDetail(item.birthday.id) })
                 }
             }
 
@@ -329,8 +383,91 @@ private fun ReminderHealthBanner(onFixClick: () -> Unit, onDismiss: () -> Unit) 
     }
 }
 
+/**
+ * FEAT-12: This Week/This Month/Later, each as a sticky header (stays pinned while its own
+ * people scroll past underneath — the same reason any app groups a long list this way) followed
+ * by that bucket's cards. A no-op (renders nothing, not even the header) when the bucket is
+ * empty, so an active relationship filter that empties out "Later" doesn't leave a floating
+ * header with nothing under it.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun LazyListScope.homeSection(
+    @StringRes titleRes: Int,
+    items: List<BirthdayUi>,
+    onNavigateToDetail: (Int) -> Unit,
+    onToggleFavorite: (Int) -> Unit
+) {
+    if (items.isEmpty()) return
+    stickyHeader {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(vertical = 8.dp)
+        ) {
+            HomeSectionHeader(stringResource(titleRes))
+        }
+    }
+    items(items, key = { it.birthday.id }) { item ->
+        UpcomingBirthdayCard(
+            item = item,
+            onClick = { onNavigateToDetail(item.birthday.id) },
+            onToggleFavorite = { onToggleFavorite(item.birthday.id) }
+        )
+    }
+}
+
 @Composable
-private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
+private fun HomeSectionHeader(title: String) {
+    Text(title, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun FilterAndSortRow(
+    relationships: List<String>,
+    selectedFilter: String?,
+    onFilterChange: (String?) -> Unit,
+    sortMode: HomeSortMode,
+    onToggleSort: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(selected = selectedFilter == null, onClick = { onFilterChange(null) }, label = { Text(stringResource(R.string.home_filter_all)) })
+            relationships.forEach { rel ->
+                FilterChip(selected = selectedFilter == rel, onClick = { onFilterChange(rel) }, label = { Text(rel) })
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onToggleSort) {
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    if (sortMode == HomeSortMode.DATE) stringResource(R.string.home_sort_by_date) else stringResource(R.string.home_sort_by_name),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteToggle(isFavorite: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onToggle, modifier = modifier.size(32.dp)) {
+        Icon(
+            if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+            contentDescription = stringResource(if (isFavorite) R.string.home_cd_unfavorite else R.string.home_cd_favorite),
+            tint = if (isFavorite) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
     val birthday = item.birthday
     val age = item.ageTurning
     Box(
@@ -348,10 +485,10 @@ private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
                         .neumorphic(cornerRadius = 32.dp, shapeBackgroundColor = MaterialTheme.colorScheme.surface)
                         .padding(4.dp)
                 ) {
-                    BirthdayAvatar(photoUri = birthday.photoUri, modifier = Modifier.fillMaxSize())
+                    BirthdayAvatar(photoUri = birthday.photoUri, name = birthday.name, modifier = Modifier.fillMaxSize())
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(birthday.name, style = MaterialTheme.typography.headlineMedium)
                     Text(
                         // FEAT-05: age is unknowable without a birth year — show a plain
@@ -362,6 +499,8 @@ private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
                     )
                     Text(birthday.relationship, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
                 }
+                // FEAT-12
+                FavoriteToggle(isFavorite = birthday.isFavorite, onToggle = onToggleFavorite)
             }
 
             NeumorphicButton(
@@ -380,7 +519,7 @@ private fun TodayBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
 }
 
 @Composable
-private fun UpcomingBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
+private fun UpcomingBirthdayCard(item: BirthdayUi, onClick: () -> Unit, onToggleFavorite: () -> Unit) {
     val birthday = item.birthday
     val monthDay = birthday.birthMonthDay()
     val dayStr = "${monthDay.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${monthDay.dayOfMonth}"
@@ -403,7 +542,7 @@ private fun UpcomingBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -411,14 +550,34 @@ private fun UpcomingBirthdayCard(item: BirthdayUi, onClick: () -> Unit) {
                         .padding(4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    BirthdayAvatar(photoUri = birthday.photoUri, modifier = Modifier.fillMaxSize())
+                    BirthdayAvatar(photoUri = birthday.photoUri, name = birthday.name, modifier = Modifier.fillMaxSize())
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(birthday.name, style = MaterialTheme.typography.labelLarge)
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(birthday.name, style = MaterialTheme.typography.labelLarge)
+                        // FEAT-12: "these are the ones worth planning for" — a small badge rather
+                        // than anything louder, since it's a nice-to-notice, not a warning.
+                        if (item.isMilestone) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .neumorphic(cornerRadius = 8.dp, shapeBackgroundColor = MaterialTheme.colorScheme.tertiaryContainer)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.home_milestone_badge, item.ageTurning ?: 0),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                        }
+                    }
                     Text("$dayStr · ${birthday.relationship}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
             }
+            FavoriteToggle(isFavorite = birthday.isFavorite, onToggle = onToggleFavorite)
+            Spacer(modifier = Modifier.width(4.dp))
             // Days-away badge
             Box(
                 modifier = Modifier

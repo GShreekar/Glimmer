@@ -13,7 +13,7 @@ import net.sqlcipher.database.SupportFactory
 // JSON schema to app/schemas/ on every build — commit those files. Without them, MigrationTestHelper
 // has nothing to migrate FROM, so a migration like MIGRATION_2_3 below can't be tested against the
 // real starting schema, only asserted about by reading the code.
-@Database(entities = [Birthday::class, Reminder::class], version = 7, exportSchema = true)
+@Database(entities = [Birthday::class, Reminder::class], version = 8, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun birthdayDao(): BirthdayDao
     abstract fun reminderDao(): ReminderDao
@@ -105,6 +105,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // FEAT-12: pin-to-top favorites, defaulting everyone's existing rows to not-favorited.
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE birthdays ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: buildDatabase(context.applicationContext).also { INSTANCE = it }
@@ -125,7 +132,7 @@ abstract class AppDatabase : RoomDatabase() {
             val builder = Room.databaseBuilder(context, AppDatabase::class.java, DB_NAME)
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                    MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
+                    MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8
                 )
             if (encrypted) {
                 builder.openHelperFactory(SupportFactory(passphrase))

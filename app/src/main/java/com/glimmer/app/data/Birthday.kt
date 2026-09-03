@@ -44,5 +44,10 @@ data class Birthday(
     // handing back every row so Kotlin can re-sort/filter it on every recomposition/keystroke.
     // Named distinctly from the birthMonthDay() extension (which returns a java.time.MonthDay,
     // not an Int) so the two can never be confused for each other at a call site.
-    val monthDayKey: Int = 0
+    val monthDayKey: Int = 0,
+    // FEAT-12: pinned to their own section at the top of Home, above the This Week/Month/Later
+    // grouping. Deliberately doesn't also change reminder timing/offsets — "default them to
+    // earlier reminders" from the review's own sketch would need a whole second default-offset
+    // concept; the person can already just add a "1 week before" reminder themselves.
+    val isFavorite: Boolean = false
 )

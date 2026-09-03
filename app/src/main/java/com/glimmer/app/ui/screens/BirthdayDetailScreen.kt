@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Redeem
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.glimmer.app.R
 import com.glimmer.app.data.birthLocalDate
 import com.glimmer.app.data.birthMonthDay
+import com.glimmer.app.data.renderWishTemplate
 import com.glimmer.app.ui.components.BirthdayAvatar
 import com.glimmer.app.ui.components.NeumorphicButton
 import com.glimmer.app.ui.components.NeumorphicIconButton
@@ -52,54 +55,9 @@ fun BirthdayDetailScreen(
 ) {
     val birthdayState by remember(id) { viewModel.getBirthdayById(id) }.collectAsState()
     val birthday = birthdayState
-    var showDeleteDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-
-    // Delete confirmation dialog
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = {
-                Text(stringResource(R.string.detail_delete_dialog_title), style = MaterialTheme.typography.headlineMedium)
-            },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.detail_delete_dialog_message,
-                        birthday?.name ?: stringResource(R.string.detail_delete_dialog_fallback_name)
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            confirmButton = {
-                NeumorphicButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        viewModel.deleteBirthday(id)
-                        onNavigateBack()
-                    },
-                    modifier = Modifier.height(44.dp).padding(end = 4.dp),
-                    cornerRadius = 10.dp,
-                    shapeBackgroundColor = MaterialTheme.colorScheme.errorContainer
-                ) {
-                    Text(stringResource(R.string.detail_delete_confirm), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
-                }
-            },
-            dismissButton = {
-                NeumorphicButton(
-                    onClick = { showDeleteDialog = false },
-                    modifier = Modifier.height(44.dp),
-                    cornerRadius = 10.dp
-                ) {
-                    Text(stringResource(R.string.detail_delete_cancel), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 16.dp))
-                }
-            }
-        )
-    }
 
     if (birthday == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -162,6 +120,22 @@ fun BirthdayDetailScreen(
                     }
                 },
                 actions = {
+                    // FEAT-12
+                    NeumorphicIconButton(
+                        onClick = { viewModel.toggleFavorite(id) },
+                        modifier = Modifier.size(40.dp),
+                        cornerRadius = 20.dp,
+                        elevation = 3.dp,
+                        blur = 6.dp
+                    ) {
+                        Icon(
+                            if (birthday.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = stringResource(if (birthday.isFavorite) R.string.home_cd_unfavorite else R.string.home_cd_favorite),
+                            tint = if (birthday.isFavorite) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     NeumorphicIconButton(
                         onClick = { onNavigateToEdit(id) },
                         modifier = Modifier.size(40.dp),
@@ -172,8 +146,17 @@ fun BirthdayDetailScreen(
                         Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.detail_cd_edit), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                    // FEAT-10: was a confirmation dialog gating an irreversible delete — now an
+                    // optimistic delete (deletes immediately) with an Undo snackbar (rendered on
+                    // Home, which this navigates back to — see GlimmerViewModel.deleteEvents /
+                    // HomeScreen's collector). Fewer taps, and strictly safer: a dialog only
+                    // guards against a mistake you catch in the two seconds before you tap
+                    // confirm; undo guards against noticing five seconds later too.
                     NeumorphicIconButton(
-                        onClick = { showDeleteDialog = true },
+                        onClick = {
+                            viewModel.deleteBirthday(id)
+                            onNavigateBack()
+                        },
                         modifier = Modifier.padding(end = 12.dp).size(40.dp),
                         cornerRadius = 20.dp,
                         elevation = 3.dp,
@@ -205,7 +188,7 @@ fun BirthdayDetailScreen(
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {
-                BirthdayAvatar(photoUri = birthday.photoUri, modifier = Modifier.fillMaxSize())
+                BirthdayAvatar(photoUri = birthday.photoUri, name = birthday.name, modifier = Modifier.fillMaxSize())
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -248,7 +231,11 @@ fun BirthdayDetailScreen(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                val smsBody = stringResource(R.string.detail_sms_body, birthday.name)
+                // FEAT-08: was the single fixed string "Happy Birthday {name}! 🎂🎉" everywhere —
+                // now resolved from the user's own template (global default, or a per-relationship
+                // override) and rendered with this person's actual name/age/relationship.
+                val wishTemplates by viewModel.wishTemplates.collectAsState()
+                val smsBody = renderWishTemplate(wishTemplates.resolve(birthday.relationship), birthday.name, age, birthday.relationship)
                 val noSmsAppMessage = stringResource(R.string.detail_snackbar_no_sms_app)
                 val noDialerAppMessage = stringResource(R.string.detail_snackbar_no_dialer_app)
                 val noBrowserMessage = stringResource(R.string.detail_snackbar_no_browser)

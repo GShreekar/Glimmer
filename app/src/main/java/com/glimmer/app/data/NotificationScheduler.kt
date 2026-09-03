@@ -15,6 +15,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.glimmer.app.MainActivity
 import com.glimmer.app.R
+// Pragmatic cross-layer import: ageOnNextBirthday lives in the viewmodel package (alongside
+// daysUntilBirthday, which every screen already imports from there) rather than being duplicated
+// here — this app has no module boundary enforcing a one-way data->viewmodel dependency anyway.
+import com.glimmer.app.viewmodel.ageOnNextBirthday
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -281,7 +285,8 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
                 try {
                     val soundEnabled = settings.soundEnabled.first()
                     val showOnLockScreen = settings.showOnLockScreen.first()
-                    postNotification(context, birthday, birthdayId, name, daysBefore, soundEnabled, showOnLockScreen)
+                    val wishTemplates = settings.wishTemplates.first()
+                    postNotification(context, birthday, birthdayId, name, daysBefore, soundEnabled, showOnLockScreen, wishTemplates)
                 } catch (t: Throwable) {
                     GLog.e("Alarm", "Failed to post the notification for birthdayId=$birthdayId", t)
                 }
@@ -343,7 +348,8 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         name: String,
         daysBefore: Int,
         soundEnabled: Boolean,
-        showOnLockScreen: Boolean
+        showOnLockScreen: Boolean,
+        wishTemplates: WishTemplates
     ) {
         NotificationScheduler.createNotificationChannel(context)
         val channelId = if (soundEnabled) {
@@ -405,9 +411,18 @@ class BirthdayAlarmReceiver : BroadcastReceiver() {
         // reach (otherwise they'd open an empty composer/dialer, same as BUG-10), "Remind me
         // later" always available since it needs no data about the person at all.
         val phone = birthday?.phoneNumber
-        if (!phone.isNullOrBlank()) {
+        if (!phone.isNullOrBlank() && birthday != null) {
+            // FEAT-08: same template resolution as the Detail screen's Message/WhatsApp actions —
+            // was a fixed "Happy Birthday {name}! 🎂🎉" string here specifically, independent of
+            // whatever the user had customized.
+            val wishBody = renderWishTemplate(
+                wishTemplates.resolve(birthday.relationship),
+                birthday.name,
+                ageOnNextBirthday(birthday),
+                birthday.relationship
+            )
             val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone")).apply {
-                putExtra("sms_body", "Happy Birthday ${birthday.name}! 🎂🎉")
+                putExtra("sms_body", wishBody)
             }
             val smsPending = PendingIntent.getActivity(
                 context, NotificationScheduler.REQUEST_CODE_MESSAGE_BASE + birthdayId, smsIntent,

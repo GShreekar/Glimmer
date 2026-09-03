@@ -20,6 +20,8 @@ import com.glimmer.app.ui.screens.CalendarScreen
 import com.glimmer.app.ui.screens.SettingsScreen
 import com.glimmer.app.ui.screens.BirthdayDetailScreen
 import com.glimmer.app.ui.screens.ImportContactsScreen
+import com.glimmer.app.ui.screens.OnboardingScreen
+import com.glimmer.app.ui.screens.WishTemplateScreen
 import com.glimmer.app.viewmodel.GlimmerViewModel
 import com.glimmer.app.ui.components.BottomNavBar
 import kotlinx.serialization.Serializable
@@ -32,16 +34,18 @@ import kotlinx.serialization.Serializable
 @Serializable object ProfileRoute
 @Serializable object SyncBackupRoute
 @Serializable object ImportRoute
+@Serializable object OnboardingRoute
+@Serializable object WishTemplateRoute
 @Serializable data class DetailRoute(val id: Int)
 @Serializable data class EditRoute(val id: Int)
 
 @Composable
-fun GlimmerApp(viewModel: GlimmerViewModel) {
+fun GlimmerApp(viewModel: GlimmerViewModel, startAtOnboarding: Boolean) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // Show bottom nav only on the 4 top-level screens
+    // Show bottom nav only on the 4 top-level screens — never during onboarding.
     val showBottomBar = currentDestination?.let {
         it.hasRoute<HomeRoute>() || it.hasRoute<AddRoute>() ||
         it.hasRoute<CalendarRoute>() || it.hasRoute<SettingsRoute>()
@@ -56,11 +60,35 @@ fun GlimmerApp(viewModel: GlimmerViewModel) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = HomeRoute,
+            // FEAT-11: decided once, before this NavHost is ever composed — see MainActivity,
+            // which reads SettingsRepository.hasCompletedOnboarding during its own async startup
+            // and passes the result in here, rather than this composable racing that same read
+            // itself and risking a flash of Home before redirecting to Onboarding (or vice versa).
+            startDestination = if (startAtOnboarding) OnboardingRoute else HomeRoute,
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
+            composable<OnboardingRoute> {
+                OnboardingScreen(
+                    viewModel = viewModel,
+                    onNavigateToImport = {
+                        navController.navigate(ImportRoute) {
+                            popUpTo(OnboardingRoute) { inclusive = true }
+                        }
+                    },
+                    onNavigateToAdd = {
+                        navController.navigate(AddRoute) {
+                            popUpTo(OnboardingRoute) { inclusive = true }
+                        }
+                    },
+                    onFinished = {
+                        navController.navigate(HomeRoute) {
+                            popUpTo(OnboardingRoute) { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable<HomeRoute> {
                 HomeScreen(
                     viewModel = viewModel,
@@ -101,7 +129,14 @@ fun GlimmerApp(viewModel: GlimmerViewModel) {
                     viewModel = viewModel,
                     onNavigateToNotifications = { navController.navigate(NotificationsRoute) },
                     onNavigateToProfile = { navController.navigate(ProfileRoute) },
-                    onNavigateToSync = { navController.navigate(SyncBackupRoute) }
+                    onNavigateToSync = { navController.navigate(SyncBackupRoute) },
+                    onNavigateToWishTemplates = { navController.navigate(WishTemplateRoute) }
+                )
+            }
+            composable<WishTemplateRoute> {
+                WishTemplateScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable<NotificationsRoute> {

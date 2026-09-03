@@ -36,6 +36,8 @@ class SettingsRepository private constructor(private val context: Context) {
         val PROFILE_EMAIL = stringPreferencesKey("profile_email")
         val PROFILE_BIRTHDAY = longPreferencesKey("profile_birthday")
         val SHOW_ON_LOCK_SCREEN = booleanPreferencesKey("show_on_lock_screen")
+        val WISH_TEMPLATES_JSON = stringPreferencesKey("wish_templates_json")
+        val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
     }
 
     val notificationsEnabled: Flow<Boolean> =
@@ -74,6 +76,14 @@ class SettingsRepository private constructor(private val context: Context) {
     val showOnLockScreen: Flow<Boolean> =
         context.settingsDataStore.data.map { it[Keys.SHOW_ON_LOCK_SCREEN] ?: false }
 
+    // FEAT-08: see WishTemplate.kt.
+    val wishTemplates: Flow<WishTemplates> =
+        context.settingsDataStore.data.map { WishTemplates.fromJson(it[Keys.WISH_TEMPLATES_JSON]) }
+
+    // FEAT-11: gates whether MainActivity routes to the onboarding flow or straight to Home.
+    val hasCompletedOnboarding: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[Keys.HAS_COMPLETED_ONBOARDING] ?: false }
+
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
     }
@@ -109,6 +119,14 @@ class SettingsRepository private constructor(private val context: Context) {
 
     suspend fun setShowOnLockScreen(show: Boolean) {
         context.settingsDataStore.edit { it[Keys.SHOW_ON_LOCK_SCREEN] = show }
+    }
+
+    suspend fun setWishTemplates(value: WishTemplates) {
+        context.settingsDataStore.edit { it[Keys.WISH_TEMPLATES_JSON] = value.toJson() }
+    }
+
+    suspend fun setHasCompletedOnboarding(completed: Boolean) {
+        context.settingsDataStore.edit { it[Keys.HAS_COMPLETED_ONBOARDING] = completed }
     }
 
     companion object {
