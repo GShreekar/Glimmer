@@ -47,3 +47,15 @@
 # SQLCipher's JNI bridge calls back into these classes by name.
 -keep class net.sqlcipher.** { *; }
 -keep class net.sqlcipher.database.** { *; }
+
+# androidx.security:security-crypto (DatabaseKeyProvider, SEC-02) pulls in Google Tink, whose
+# compiled classes carry annotations from com.google.errorprone:error_prone_annotations — a
+# compile-time-only, SOURCE-retention dependency of Tink's own build that Tink does NOT declare as
+# a runtime dependency. R8 still inspects the annotation references while shrinking and fails with
+# "Missing class" for each one unless told they're safe to ignore; -dontwarn (not -keep, since
+# nothing here needs to survive at runtime — these annotations do nothing at runtime by design) is
+# the fix Tink's own documentation recommends. javax.annotation.** (JSR-305, e.g. @Nullable) is the
+# same story on some Tink versions, added preemptively since it's the near-universal companion to
+# this exact failure.
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**

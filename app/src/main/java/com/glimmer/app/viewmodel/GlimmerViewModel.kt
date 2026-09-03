@@ -340,7 +340,7 @@ class GlimmerViewModel(
 
 /** A one-shot event a screen renders and then forgets. */
 sealed interface UiEvent {
-    data class Error(@StringRes val messageRes: Int) : UiEvent
+    data class Error(@param:StringRes val messageRes: Int) : UiEvent
     /** FEAT-02: how many birthdays a Contacts import just added — always > 0 when emitted. */
     data class ImportSuccess(val count: Int) : UiEvent
 }
